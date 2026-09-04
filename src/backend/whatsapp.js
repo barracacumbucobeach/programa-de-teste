@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('fs');
 const EventEmitter = require('events');
 const qrcode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
@@ -47,11 +48,32 @@ class WhatsAppConnection extends EventEmitter {
     this.flowEngine = flowEngine;
     this.conversationLog = conversationLog;
     this.sock = null;
-    this.status = 'connecting'; // connecting | qr | connected | disconnected
+    this.status = 'connecting'; // idle | connecting | qr | connected | disconnected
     this.phone = null;
     this.qrDataUrl = null;
     this.stats = { received: 0, sent: 0 };
     this.DisconnectReason = null;
+    // Detecta uma sessão local corrompida/inválida: se a conexão cai várias
+    // vezes seguidas sem nunca chegar a exibir um QR Code ou conectar de
+    // fato, as credenciais salvas em disco provavelmente estão quebradas —
+    // nesse caso a sessão é limpa automaticamente para forçar um QR novo,
+    // já que só reiniciar (com as mesmas credenciais ruins) nunca resolveria.
+    this.consecutiveFailures = 0;
+    this.hasAutoRecovered = false;
+    // true quando o próprio usuário pediu para desconectar (botão
+    // "Desconectar"): nesse caso o motor NÃO tenta reconectar sozinho,
+    // fica em repouso ('idle') até um "Conectar" explícito.
+    this.manuallyDisconnected = false;
+  }
+
+  /** Apaga as credenciais locais salvas (data/auth_session) para forçar um QR Code novo. */
+  async clearSession() {
+    try {
+      await fs.promises.rm(store.AUTH_DIR, { recursive: true, force: true });
+      logger.warn('🗑️  Sessão local do WhatsApp apagada.');
+    } catch (err) {
+      logger.error('Falha ao apagar a sessão local:', err.message);
+    }
   }
 
   async start() {
@@ -91,6 +113,7 @@ class WhatsAppConnection extends EventEmitter {
         logger.error('Falha ao gerar imagem do QR Code:', err.message);
       }
       this.status = 'qr';
+      this.consecutiveFailures = 0; // conseguiu chegar a um QR: a sessão local não é o problema
       qrcodeTerminal.generate(qr, { small: true });
       logger.info('📌 QR Code atualizado — escaneie pelo app ou pelo terminal.');
       this.emitStatus();
@@ -98,20 +121,54 @@ class WhatsAppConnection extends EventEmitter {
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== this.DisconnectReason?.loggedOut;
+      const loggedOut = statusCode === this.DisconnectReason?.loggedOut;
+
+      if (this.manuallyDisconnected) {
+        // Fomos nós que pedimos para desconectar (disconnect() já limpou a
+        // sessão) — fica em repouso, sem tentar reconectar sozinho.
+        this.status = 'idle';
+        this.phone = null;
+        this.qrDataUrl = null;
+        this.emitStatus();
+        return;
+      }
 
       this.status = 'disconnected';
       this.phone = null;
       this.emitStatus();
-      logger.warn(`Conexão encerrada (código ${statusCode ?? '?'}). Reconectar automaticamente: ${shouldReconnect}`);
 
-      if (shouldReconnect) {
-        setTimeout(() => this.start(), 2000);
+      if (loggedOut) {
+        // O próprio WhatsApp encerrou a sessão (ex.: removida pelo celular) —
+        // começa do zero para não ficar preso tentando reconectar com
+        // credenciais que o WhatsApp já invalidou.
+        logger.warn('Sessão desconectada pelo WhatsApp. Gerando um QR Code novo…');
+        await this.clearSession();
+        this.consecutiveFailures = 0;
+        setTimeout(() => this.start(), 1500);
+        return;
       }
+
+      this.consecutiveFailures += 1;
+      logger.warn(`Conexão encerrada (código ${statusCode ?? '?'}). Tentativa de reconexão nº ${this.consecutiveFailures}…`);
+
+      if (this.consecutiveFailures >= 3 && !this.hasAutoRecovered) {
+        // Várias quedas seguidas sem nunca exibir QR nem conectar: a sessão
+        // local salva provavelmente está corrompida. Reiniciar sozinho não
+        // resolveria (reusaria as mesmas credenciais quebradas), então limpa
+        // a sessão automaticamente para forçar a geração de um QR Code novo.
+        logger.warn('⚠️ Muitas falhas seguidas — limpando a sessão local automaticamente para gerar um QR novo.');
+        this.hasAutoRecovered = true;
+        await this.clearSession();
+        this.consecutiveFailures = 0;
+      }
+
+      setTimeout(() => this.start(), 2000);
     } else if (connection === 'open') {
       this.status = 'connected';
       this.qrDataUrl = null;
       this.phone = this.sock?.user?.id?.split(':')[0] || null;
+      this.consecutiveFailures = 0;
+      this.hasAutoRecovered = false;
       this.emitStatus();
       logger.info('✅ AutoFlow Desktop conectado com sucesso ao WhatsApp!');
     }
@@ -188,22 +245,56 @@ class WhatsAppConnection extends EventEmitter {
     };
   }
 
-  async logout() {
-    if (this.sock) {
-      await this.sock.logout().catch(() => {});
+  /**
+   * Desconecta por decisão do usuário: encerra a sessão no WhatsApp, apaga
+   * as credenciais locais e FICA DESCONECTADO (não tenta reconectar
+   * sozinho) até um "Conectar" explícito — exatamente para permitir
+   * conectar/desconectar quando quiser, sem o motor brigando para voltar
+   * a subir sozinho no meio do caminho.
+   */
+  async disconnect() {
+    this.manuallyDisconnected = true;
+
+    try {
+      if (this.sock) {
+        await this.sock.logout().catch(() => {});
+        this.sock.end?.(undefined);
+      }
+    } finally {
+      await this.clearSession();
     }
-    this.status = 'disconnected';
+
+    this.sock = null;
+    this.status = 'idle';
     this.phone = null;
     this.qrDataUrl = null;
+    this.consecutiveFailures = 0;
+    this.hasAutoRecovered = false;
     this.emitStatus();
   }
 
+  /** Conecta (ou reconecta) por decisão do usuário — sempre gera um QR Code novo,
+   *  já que a sessão só é preservada em disco entre uma queda e a reconexão
+   *  automática, nunca depois de um disconnect() manual. */
+  async connect() {
+    this.manuallyDisconnected = false;
+    this.status = 'connecting';
+    this.emitStatus();
+    await this.start();
+  }
+
+  /** Reset "forte": limpa a sessão local e reconecta na hora — usado pelo botão
+   *  "Gerar novo QR Code" quando a conexão está travada sem nunca exibir um QR. */
   async restart() {
     try {
       this.sock?.end?.(undefined);
     } catch {
       /* conexão já pode estar encerrada */
     }
+    await this.clearSession();
+    this.manuallyDisconnected = false;
+    this.consecutiveFailures = 0;
+    this.hasAutoRecovered = false;
     this.status = 'connecting';
     this.emitStatus();
     await this.start();

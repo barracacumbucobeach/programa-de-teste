@@ -1,6 +1,9 @@
 {
   "start": {
+    "kind": "text",
+    "title": "Início",
     "mensagem": "Olá! Bem-vindo à nossa loja! 👋\nComo posso te ajudar hoje?\n\n1 - Ver Catálogo de Produtos\n2 - Horário de Funcionamento\n3 - Falar com Atendente",
+    "mediaUrl": "",
     "opcoes": {
       "1": "no_catalogo",
       "2": "no_horario",
@@ -8,15 +11,24 @@
     }
   },
   "no_catalogo": {
+    "kind": "text",
+    "title": "Catálogo",
     "mensagem": "Acesse o nosso catálogo completo através do link: https://loja.exemplo.com/catalogo",
+    "mediaUrl": "",
     "opcoes": {}
   },
   "no_horario": {
+    "kind": "text",
+    "title": "Horário",
     "mensagem": "⏰ Nosso horário de atendimento é de Segunda a Sábado, das 08h às 18h.",
+    "mediaUrl": "",
     "opcoes": {}
   },
   "no_atendente": {
+    "kind": "handoff",
+    "title": "Atendente",
     "mensagem": "👤 Perfeito! Aguarde só um momento que um de nossos atendentes já vai te responder por aqui.",
+    "mediaUrl": "",
     "opcoes": {}
   }
 }

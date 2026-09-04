@@ -64,8 +64,13 @@ function createServer({ whatsapp, flowEngine, conversationLog, customerStore }) 
     res.json({ ok: true });
   });
 
+  app.post('/api/session/connect', (req, res) => {
+    whatsapp.connect();
+    res.json({ ok: true });
+  });
+
   app.post('/api/session/logout', async (req, res) => {
-    await whatsapp.logout();
+    await whatsapp.disconnect();
     res.json({ ok: true });
   });
 
@@ -88,12 +93,28 @@ function createServer({ whatsapp, flowEngine, conversationLog, customerStore }) 
     res.json({ ok: true });
   });
 
+  app.get('/api/handoffs', (req, res) => {
+    res.json(customerStore.listPendingHandoffs());
+  });
+
+  app.post('/api/handoffs/:jid/resolve', (req, res) => {
+    const jid = decodeURIComponent(req.params.jid);
+    flowEngine.releaseHandoff(jid);
+    broadcast({ type: 'handoff-resolved', payload: { jid } });
+    res.json({ ok: true });
+  });
+
   wss.on('connection', (socket) => {
     socket.send(JSON.stringify({ type: 'status', payload: whatsapp.getSnapshot() }));
   });
 
   whatsapp.on('status', (snapshot) => broadcast({ type: 'status', payload: snapshot }));
   whatsapp.on('message-log', pushLog);
+
+  flowEngine.on('handoff', (payload) => {
+    logger.info(`🙋 Cliente +${payload.phone} pediu atendimento humano (${payload.nodeTitle}).`);
+    broadcast({ type: 'handoff', payload });
+  });
 
   return { app, server, broadcast };
 }

@@ -1,5 +1,12 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
+
+/** Cresce junto com o conteúdo (até um teto), sem sensação de limite de tamanho. */
+function autoResize(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+}
 
 export const KIND_META = {
   text: { label: 'Texto', icon: '💬', group: 'bubble' },
@@ -10,6 +17,7 @@ export const KIND_META = {
   input_number: { label: 'Número', icon: '🔢', group: 'input', defaultVariable: 'numero' },
   input_email: { label: 'E-mail', icon: '✉️', group: 'input', defaultVariable: 'email' },
   input_phone: { label: 'Telefone', icon: '📞', group: 'input', defaultVariable: 'telefone' },
+  handoff: { label: 'Atendente', icon: '🙋', group: 'handoff' },
 };
 
 const MEDIA_KINDS = new Set(['image', 'video', 'audio']);
@@ -19,8 +27,9 @@ export default function MessageNode({ id, data }) {
   const kind = data.kind || 'text';
   const meta = KIND_META[kind] || KIND_META.text;
   const isInput = meta.group === 'input';
-  const hasMessage = Boolean(data.mensagem?.trim());
+  const isHandoff = meta.group === 'handoff';
   const hasMedia = Boolean(data.mediaUrl?.trim());
+  const textareaRef = useCallback((el) => autoResize(el), [data.mensagem]);
 
   return (
     <div className={`flow-node kind-${kind} ${data.selected ? 'is-selected' : ''} ${isStart ? 'is-start' : ''}`}>
@@ -59,13 +68,28 @@ export default function MessageNode({ id, data }) {
         </div>
       )}
 
-      <p className={`flow-node-body ${hasMessage ? '' : 'is-empty'}`}>
-        {hasMessage ? data.mensagem : kind === 'text' || isInput ? 'Clique para escrever a mensagem…' : 'Legenda (opcional)…'}
-      </p>
+      <textarea
+        ref={textareaRef}
+        className="flow-node-inline-textarea nodrag nowheel"
+        rows={2}
+        value={data.mensagem || ''}
+        onChange={(event) => {
+          data.onMensagemChange?.(event.target.value);
+          autoResize(event.target);
+        }}
+        placeholder={
+          isHandoff
+            ? 'Mensagem enviada ao transferir (opcional)…'
+            : kind === 'text' || isInput
+              ? 'Digite a mensagem aqui…'
+              : 'Legenda (opcional)…'
+        }
+      />
 
       {isInput && <div className="flow-node-variable">💾 salva em: {data.variable?.trim() || meta.defaultVariable}</div>}
+      {isHandoff && <div className="flow-node-handoff-hint">🙋 Pausa o bot e avisa a loja</div>}
 
-      {!isInput && (
+      {!isInput && !isHandoff && (
         <button
           type="button"
           className="flow-node-add"

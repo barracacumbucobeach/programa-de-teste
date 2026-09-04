@@ -5,7 +5,8 @@ const STATUS_LABEL = {
   connected: 'Conectado ao WhatsApp',
   qr: 'Aguardando leitura do QR Code',
   connecting: 'Conectando…',
-  disconnected: 'Desconectado',
+  disconnected: 'Reconectando…',
+  idle: 'Desconectado',
 };
 
 function formatTime(timestamp) {

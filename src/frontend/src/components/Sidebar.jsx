@@ -5,7 +5,8 @@ const STATUS_LABEL = {
   connected: 'Conectado',
   qr: 'Aguardando leitura',
   connecting: 'Conectando…',
-  disconnected: 'Desconectado',
+  disconnected: 'Reconectando…',
+  idle: 'Desconectado',
 };
 
 const BUBBLE_PALETTE = [
@@ -21,6 +22,8 @@ const INPUT_PALETTE = [
   { kind: 'input_email', ...KIND_META.input_email },
   { kind: 'input_phone', ...KIND_META.input_phone },
 ];
+
+const HANDOFF_PALETTE = [{ kind: 'handoff', ...KIND_META.handoff }];
 
 export const DRAG_MIME = 'application/autoflow-node';
 
@@ -48,7 +51,17 @@ function PaletteGrid({ items, onAddNode }) {
   );
 }
 
-export default function Sidebar({ nodes, edges, status, onAddNode, onOpenQr, onOpenConversations, onOpenCustomers }) {
+export default function Sidebar({
+  nodes,
+  edges,
+  status,
+  onAddNode,
+  onOpenQr,
+  onOpenConversations,
+  onOpenCustomers,
+  onOpenHandoffs,
+  pendingHandoffCount = 0,
+}) {
   const startExists = nodes.some((node) => node.id === 'start');
   const orphanCount = nodes.filter(
     (node) => node.id !== 'start' && !edges.some((edge) => edge.target === node.id)
@@ -76,7 +89,17 @@ export default function Sidebar({ nodes, edges, status, onAddNode, onOpenQr, onO
         <PaletteGrid items={INPUT_PALETTE} onAddNode={onAddNode} />
       </div>
 
+      <div className="sidebar-section">
+        <h3>Atendimento humano</h3>
+        <p className="palette-hint">Transfere a conversa: pausa o bot e avisa você (veja em "Atendimentos" abaixo).</p>
+        <PaletteGrid items={HANDOFF_PALETTE} onAddNode={onAddNode} />
+      </div>
+
       <div className="sidebar-quick-actions">
+        <button type="button" className="btn btn-block btn-ghost btn-with-badge" onClick={onOpenHandoffs}>
+          🙋 Atendimentos
+          {pendingHandoffCount > 0 && <span className="badge-count">{pendingHandoffCount}</span>}
+        </button>
         <button type="button" className="btn btn-block btn-ghost" onClick={onOpenConversations}>
           💬 Conversas
         </button>

@@ -57,16 +57,49 @@ class FlowEngine extends EventEmitter {
   _render(key, jid) {
     const node = this.flow[key];
     if (!node) return { key, node: null, isWelcome: true };
+
+    if (node.kind === 'handoff') {
+      // Pausa o bot para este cliente e avisa quem estiver com o app aberto
+      // (toast, notificação do sistema e o painel "Atendimentos").
+      const handoff = this.customerStore?.requestHandoff(jid, { nodeTitle: node.title || key });
+      this.emit('handoff', {
+        jid,
+        phone: jid.split('@')[0],
+        nodeKey: key,
+        nodeTitle: node.title || key,
+        at: handoff?.requestedAt || Date.now(),
+      });
+    }
+
     return { key, node: this._withVariables(node, jid), isWelcome: true };
   }
 
+  /** Atendente marcou como resolvido: bot volta a responder e o cliente reinicia no início. */
+  releaseHandoff(jid) {
+    this.customerStore?.resolveHandoff(jid);
+    this.setState(jid, 'start');
+  }
+
   /**
-   * @returns {{ key: string, node: object|null, isWelcome: boolean, unmatched?: boolean }}
+   * @returns {{ key: string, node: object|null, isWelcome: boolean, unmatched?: boolean, paused?: boolean }}
    */
   resolveNextNode(jid, rawText) {
     const text = (rawText || '').trim();
     const normalized = text.toLowerCase();
     const isNewClient = !(jid in this.clientStates);
+    const isPaused = !isNewClient && this.customerStore?.isHandoffPending(jid);
+
+    if (isPaused) {
+      if (RESET_KEYWORDS.has(normalized)) {
+        this.customerStore?.resolveHandoff(jid);
+        this.setState(jid, 'start');
+        return this._render('start', jid);
+      }
+      // Um atendente humano está cuidando desta conversa — o bot fica em
+      // silêncio (a mensagem ainda é registrada no histórico, só não gera
+      // resposta automática) até ser marcada como resolvida.
+      return { key: this.clientStates[jid], node: null, isWelcome: false, paused: true };
+    }
 
     if (isNewClient || RESET_KEYWORDS.has(normalized)) {
       this.setState(jid, 'start');

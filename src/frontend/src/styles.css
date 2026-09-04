@@ -21,6 +21,7 @@
   --kind-video: #f472b6;
   --kind-audio: #fbbf24;
   --kind-input: #2dd4bf;
+  --kind-handoff: #fb923c;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
@@ -53,6 +54,7 @@
   --kind-video: #db2777;
   --kind-audio: #b45309;
   --kind-input: #0d9488;
+  --kind-handoff: #c2410c;
   --shadow-md: 0 8px 20px rgba(30, 41, 59, 0.1);
   --shadow-lg: 0 20px 48px rgba(30, 41, 59, 0.16);
 }
@@ -82,15 +84,22 @@ button {
 /* ---------- layout ---------- */
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 272px 1fr;
+  /* flex (não grid): o painel de edição de nó é o 3º filho só quando um nó
+     está selecionado — com grid de 2 colunas fixas ele quebrava para uma
+     nova linha embaixo à esquerda em vez de aparecer como coluna à direita. */
+  display: flex;
   height: 100vh;
   width: 100vw;
   overflow: hidden;
 }
 
+.app-shell > .sidebar {
+  flex: 0 0 272px;
+}
+
 .app-main {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
 }
@@ -289,11 +298,35 @@ button {
 .palette-video .palette-icon { color: var(--kind-video); }
 .palette-audio .palette-icon { color: var(--kind-audio); }
 .palette-item[class*="palette-input_"] .palette-icon { color: var(--kind-input); }
+.palette-handoff .palette-icon { color: var(--kind-handoff); }
 
 .sidebar-quick-actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.btn-with-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .sidebar-hint p {
@@ -431,6 +464,10 @@ button {
   background: var(--danger);
 }
 
+.status-idle .dot {
+  background: var(--text-muted);
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
@@ -559,17 +596,33 @@ button {
   background: rgba(45, 212, 191, 0.14);
   color: var(--kind-input);
 }
+.badge-handoff { background: rgba(251, 146, 60, 0.16); color: var(--kind-handoff); }
 
 .flow-node.kind-image { border-color: rgba(192, 132, 252, 0.35); }
 .flow-node.kind-video { border-color: rgba(244, 114, 182, 0.35); }
 .flow-node.kind-audio { border-color: rgba(251, 191, 36, 0.35); }
 .flow-node[class*="kind-input_"] { border-color: rgba(45, 212, 191, 0.35); }
+.flow-node.kind-handoff {
+  border-color: rgba(251, 146, 60, 0.5);
+  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.18), var(--shadow-md);
+}
 
 .flow-node-variable {
   font-size: 10.5px;
   font-weight: 700;
   color: var(--kind-input);
   background: rgba(45, 212, 191, 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-bottom: 8px;
+  display: inline-block;
+}
+
+.flow-node-handoff-hint {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--kind-handoff);
+  background: rgba(251, 146, 60, 0.1);
   border-radius: 6px;
   padding: 4px 8px;
   margin-bottom: 8px;
@@ -620,19 +673,38 @@ button {
   background: var(--danger-soft);
 }
 
-.flow-node-body {
+.flow-node-inline-textarea {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  max-height: 220px;
   margin: 0 0 10px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--text-secondary);
-  max-height: 78px;
-  overflow: hidden;
-  white-space: pre-wrap;
+  resize: none;
+  overflow-y: auto;
+  cursor: text;
 }
 
-.flow-node-body.is-empty {
+.flow-node-inline-textarea::placeholder {
   color: var(--text-muted);
   font-style: italic;
+}
+
+.flow-node-inline-textarea:hover {
+  background: var(--bg-elevated);
+}
+
+.flow-node-inline-textarea:focus {
+  outline: none;
+  background: var(--bg-elevated);
+  border-color: var(--accent);
 }
 
 .flow-node-add {
@@ -699,6 +771,7 @@ button {
 /* ---------- node editing panel ---------- */
 
 .node-panel {
+  flex: 0 0 320px;
   width: 320px;
   background: var(--bg-panel);
   border-left: 1px solid var(--border-soft);
@@ -1117,6 +1190,47 @@ button {
   margin: -4px 0 14px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.handoff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.handoff-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(251, 146, 60, 0.3);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.handoff-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.handoff-phone {
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--text-primary);
+}
+
+.handoff-meta {
+  font-size: 11.5px;
+  color: var(--kind-handoff);
+  font-weight: 600;
 }
 
 .customers-table-wrap {

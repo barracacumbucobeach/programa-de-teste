@@ -18,11 +18,14 @@ export const api = {
   saveBuilder: (graph) => request('/api/builder', { method: 'POST', body: JSON.stringify(graph) }),
   getStatus: () => request('/api/status'),
   restartSession: () => request('/api/session/restart', { method: 'POST' }),
+  connectSession: () => request('/api/session/connect', { method: 'POST' }),
   logoutSession: () => request('/api/session/logout', { method: 'POST' }),
   getConversations: () => request('/api/conversations'),
   getConversationMessages: (jid) => request(`/api/conversations/${encodeURIComponent(jid)}`),
   getCustomers: () => request('/api/customers'),
   deleteCustomer: (jid) => request(`/api/customers/${encodeURIComponent(jid)}`, { method: 'DELETE' }),
+  getHandoffs: () => request('/api/handoffs'),
+  resolveHandoff: (jid) => request(`/api/handoffs/${encodeURIComponent(jid)}/resolve`, { method: 'POST' }),
 };
 
 /**

@@ -3,11 +3,9 @@
     {
       "id": "start",
       "type": "message",
-      "position": {
-        "x": 380,
-        "y": 40
-      },
+      "position": { "x": 380, "y": 40 },
       "data": {
+        "kind": "text",
         "title": "Início",
         "mensagem": "Olá! Bem-vindo à nossa loja! 👋\nComo posso te ajudar hoje?\n\n1 - Ver Catálogo de Produtos\n2 - Horário de Funcionamento\n3 - Falar com Atendente"
       }
@@ -15,11 +13,9 @@
     {
       "id": "no_catalogo",
       "type": "message",
-      "position": {
-        "x": 40,
-        "y": 320
-      },
+      "position": { "x": 40, "y": 320 },
       "data": {
+        "kind": "text",
         "title": "Catálogo",
         "mensagem": "Acesse o nosso catálogo completo através do link: https://loja.exemplo.com/catalogo"
       }
@@ -27,11 +23,9 @@
     {
       "id": "no_horario",
       "type": "message",
-      "position": {
-        "x": 400,
-        "y": 320
-      },
+      "position": { "x": 400, "y": 320 },
       "data": {
+        "kind": "text",
         "title": "Horário",
         "mensagem": "⏰ Nosso horário de atendimento é de Segunda a Sábado, das 08h às 18h."
       }
@@ -39,11 +33,9 @@
     {
       "id": "no_atendente",
       "type": "message",
-      "position": {
-        "x": 760,
-        "y": 320
-      },
+      "position": { "x": 760, "y": 320 },
       "data": {
+        "kind": "handoff",
         "title": "Atendente",
         "mensagem": "👤 Perfeito! Aguarde só um momento que um de nossos atendentes já vai te responder por aqui."
       }
@@ -55,27 +47,21 @@
       "source": "start",
       "target": "no_catalogo",
       "type": "labeled",
-      "data": {
-        "trigger": "1"
-      }
+      "data": { "trigger": "1" }
     },
     {
       "id": "e-start-horario",
       "source": "start",
       "target": "no_horario",
       "type": "labeled",
-      "data": {
-        "trigger": "2"
-      }
+      "data": { "trigger": "2" }
     },
     {
       "id": "e-start-atendente",
       "source": "start",
       "target": "no_atendente",
       "type": "labeled",
-      "data": {
-        "trigger": "3"
-      }
+      "data": { "trigger": "3" }
     }
   ]
 }

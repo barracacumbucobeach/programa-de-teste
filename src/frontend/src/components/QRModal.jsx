@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
+/**
+ * Três estados possíveis:
+ *  - 'connected'          → conectado, com botão "Desconectar"
+ *  - 'idle'                → desconectado por decisão do usuário, parado de
+ *                            propósito, com botão "Conectar" (gera QR novo)
+ *  - qualquer outro         → conectando/aguardando QR, com botão para
+ *    ('connecting'/'qr'/      forçar um QR novo caso fique travado
+ *     'disconnected')
+ */
 export default function QRModal({ open, onClose, status }) {
   const [busy, setBusy] = useState(false);
 
@@ -13,23 +22,17 @@ export default function QRModal({ open, onClose, status }) {
 
   if (!open) return null;
 
-  const handleRestart = async () => {
+  const runAction = async (action) => {
     setBusy(true);
     try {
-      await api.restartSession();
+      await action();
     } finally {
       setBusy(false);
     }
   };
 
-  const handleLogout = async () => {
-    setBusy(true);
-    try {
-      await api.logoutSession();
-    } finally {
-      setBusy(false);
-    }
-  };
+  const isConnected = status.status === 'connected';
+  const isIdle = status.status === 'idle';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -41,16 +44,39 @@ export default function QRModal({ open, onClose, status }) {
           </button>
         </div>
 
-        {status.status === 'connected' ? (
+        {isConnected && (
           <div className="qr-connected">
             <div className="qr-connected-icon">✅</div>
             <p>Conectado com sucesso!</p>
             {status.phone && <span className="qr-phone">+{status.phone}</span>}
-            <button type="button" className="btn btn-outline-danger btn-block" onClick={handleLogout} disabled={busy}>
-              Encerrar sessão
+            <button
+              type="button"
+              className="btn btn-outline-danger btn-block"
+              onClick={() => runAction(api.logoutSession)}
+              disabled={busy}
+            >
+              🔌 Desconectar
             </button>
           </div>
-        ) : (
+        )}
+
+        {isIdle && (
+          <div className="qr-connected">
+            <div className="qr-connected-icon">🔌</div>
+            <p>Desconectado</p>
+            <span className="qr-phone">Você pediu para desconectar — conecte quando quiser.</span>
+            <button
+              type="button"
+              className="btn btn-primary btn-block"
+              onClick={() => runAction(api.connectSession)}
+              disabled={busy}
+            >
+              {busy ? 'Conectando…' : '🔌 Conectar'}
+            </button>
+          </div>
+        )}
+
+        {!isConnected && !isIdle && (
           <div className="qr-body">
             {status.qr ? (
               <img src={status.qr} alt="QR Code do WhatsApp" className="qr-image" />
@@ -66,7 +92,12 @@ export default function QRModal({ open, onClose, status }) {
                 Toque em <strong>Conectar um aparelho</strong> e aponte a câmera para o QR Code
               </li>
             </ol>
-            <button type="button" className="btn btn-ghost btn-block" onClick={handleRestart} disabled={busy}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-block"
+              onClick={() => runAction(api.restartSession)}
+              disabled={busy}
+            >
               🔄 Gerar novo QR Code
             </button>
           </div>

@@ -16,6 +16,7 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
   const kind = node.data.kind || 'text';
   const meta = KIND_META[kind] || KIND_META.text;
   const isInput = meta.group === 'input';
+  const isHandoff = meta.group === 'handoff';
   const isMedia = MEDIA_KINDS.has(kind);
   const outgoing = edges.filter((edge) => edge.source === node.id);
 
@@ -26,7 +27,11 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
   return (
     <aside className="node-panel">
       <div className="node-panel-head">
-        <h3>{isStart ? 'Mensagem inicial' : `Editar ${meta.label.toLowerCase()}${isInput ? ' (pergunta)' : ''}`}</h3>
+        <h3>
+          {isStart
+            ? 'Mensagem inicial'
+            : `Editar ${meta.label.toLowerCase()}${isInput ? ' (pergunta)' : isHandoff ? ' (transferência)' : ''}`}
+        </h3>
         <button type="button" className="icon-btn" onClick={onClose} title="Fechar">
           ✕
         </button>
@@ -76,10 +81,12 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
       )}
 
       <label className="field">
-        <span>{isInput ? 'Pergunta enviada ao cliente' : kind === 'text' ? 'Mensagem enviada' : 'Legenda (opcional)'}</span>
+        <span>
+          {isInput ? 'Pergunta enviada ao cliente' : isHandoff ? 'Mensagem antes de transferir (opcional)' : kind === 'text' ? 'Mensagem enviada' : 'Legenda (opcional)'}
+        </span>
         <textarea
           ref={textareaRef}
-          rows={kind === 'text' || isInput ? 6 : 3}
+          rows={kind === 'text' || isInput || isHandoff ? 6 : 3}
           value={node.data.mensagem || ''}
           onChange={(event) => {
             onChange({ mensagem: event.target.value });
@@ -88,9 +95,11 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
           placeholder={
             isInput
               ? 'Ex: Qual é o seu nome?'
-              : kind === 'text'
-                ? 'Digite a mensagem que o bot enviará… (sem limite de tamanho)'
-                : 'Texto que acompanha o arquivo…'
+              : isHandoff
+                ? 'Ex: Já vou te encaminhar para um atendente, aguarde só um instante…'
+                : kind === 'text'
+                  ? 'Digite a mensagem que o bot enviará… (sem limite de tamanho)'
+                  : 'Texto que acompanha o arquivo…'
           }
         />
         <span className="field-hint field-hint-left">
@@ -99,7 +108,16 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
         </span>
       </label>
 
-      {isInput ? (
+      {isHandoff ? (
+        <div className="field">
+          <span>O que acontece aqui</span>
+          <p className="input-next-hint">
+            🙋 O bot pausa as respostas automáticas para este cliente e avisa você (toast, notificação do sistema e no
+            painel <strong>"Atendimentos"</strong>) — até você marcar como atendido, ou o cliente digitar{' '}
+            <code>menu</code> para voltar sozinho.
+          </p>
+        </div>
+      ) : isInput ? (
         <div className="field">
           <span>Depois de responder, segue para</span>
           <p className="input-next-hint">

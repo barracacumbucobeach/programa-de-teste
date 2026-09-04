@@ -19,6 +19,7 @@ import NodePanel from './components/NodePanel.jsx';
 import QRModal from './components/QRModal.jsx';
 import ConversationsModal from './components/ConversationsModal.jsx';
 import CustomersModal from './components/CustomersModal.jsx';
+import HandoffsModal from './components/HandoffsModal.jsx';
 import ToastStack, { useToasts } from './components/ToastStack.jsx';
 import MessageNode, { KIND_META } from './components/nodes/MessageNode.jsx';
 import LabeledEdge from './components/edges/LabeledEdge.jsx';
@@ -30,6 +31,25 @@ const edgeTypes = { labeled: LabeledEdge };
 
 let idCounter = 1;
 const generateId = () => `no_${Date.now().toString(36)}_${idCounter++}`;
+
+/** Notificação nativa do sistema operacional (funciona dentro do Electron
+ *  sem nenhuma configuração extra) — usada para avisar de um pedido de
+ *  atendimento humano mesmo com a janela minimizada/em segundo plano. */
+function notifyDesktop(title, body) {
+  try {
+    if (typeof Notification === 'undefined') return;
+    const show = () => new Notification(title, { body });
+    if (Notification.permission === 'granted') {
+      show();
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then((permission) => {
+        if (permission === 'granted') show();
+      });
+    }
+  } catch {
+    /* notificações não suportadas neste ambiente — ignora silenciosamente */
+  }
+}
 
 /**
  * Área do quadro (React Flow) isolada num componente próprio só para poder
@@ -98,7 +118,11 @@ export default function App() {
   const [qrOpen, setQrOpen] = useState(false);
   const [conversationsOpen, setConversationsOpen] = useState(false);
   const [customersOpen, setCustomersOpen] = useState(false);
+  const [handoffsOpen, setHandoffsOpen] = useState(false);
   const [liveMessage, setLiveMessage] = useState(null);
+  const [liveHandoff, setLiveHandoff] = useState(null);
+  const [liveHandoffResolved, setLiveHandoffResolved] = useState(null);
+  const [pendingHandoffs, setPendingHandoffs] = useState([]);
   const [theme, setTheme] = useState(getInitialTheme);
   const { toasts, pushToast, dismissToast } = useToasts();
 
@@ -127,10 +151,24 @@ export default function App() {
     })();
 
     api.getStatus().then(setStatus).catch(() => {});
+    api.getHandoffs().then(setPendingHandoffs).catch(() => {});
 
     const closeSocket = connectSocket((message) => {
       if (message.type === 'status') setStatus(message.payload);
       if (message.type === 'message-log') setLiveMessage(message.payload);
+
+      if (message.type === 'handoff') {
+        const payload = message.payload;
+        setPendingHandoffs((current) => [payload, ...current.filter((h) => h.jid !== payload.jid)]);
+        setLiveHandoff(payload);
+        pushToast('info', `🙋 +${payload.phone} quer falar com um atendente${payload.nodeTitle ? ` (${payload.nodeTitle})` : ''}!`);
+        notifyDesktop('Atendimento solicitado', `+${payload.phone} quer falar com um atendente`);
+      }
+
+      if (message.type === 'handoff-resolved') {
+        setPendingHandoffs((current) => current.filter((h) => h.jid !== message.payload.jid));
+        setLiveHandoffResolved(message.payload);
+      }
     });
 
     return () => {
@@ -255,6 +293,7 @@ export default function App() {
       selected: node.id === selectedNodeId,
       onAddOption: () => addConnectedNode(node.id),
       onDelete: () => deleteNode(node.id),
+      onMensagemChange: (value) => updateNodeData(node.id, { mensagem: value }),
     },
   }));
 
@@ -273,6 +312,8 @@ export default function App() {
         onOpenQr={() => setQrOpen(true)}
         onOpenConversations={() => setConversationsOpen(true)}
         onOpenCustomers={() => setCustomersOpen(true)}
+        onOpenHandoffs={() => setHandoffsOpen(true)}
+        pendingHandoffCount={pendingHandoffs.length}
       />
 
       <div className="app-main">
@@ -322,6 +363,13 @@ export default function App() {
       <QRModal open={qrOpen} onClose={() => setQrOpen(false)} status={status} />
       <ConversationsModal open={conversationsOpen} onClose={() => setConversationsOpen(false)} liveMessage={liveMessage} />
       <CustomersModal open={customersOpen} onClose={() => setCustomersOpen(false)} pushToast={pushToast} />
+      <HandoffsModal
+        open={handoffsOpen}
+        onClose={() => setHandoffsOpen(false)}
+        liveHandoff={liveHandoff}
+        liveHandoffResolved={liveHandoffResolved}
+        pushToast={pushToast}
+      />
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

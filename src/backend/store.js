@@ -90,7 +90,8 @@ function validateGraph(graph) {
 
 const MESSAGE_KINDS = new Set(['text', 'image', 'video', 'audio']);
 const INPUT_KINDS = new Set(['input_text', 'input_number', 'input_email', 'input_phone']);
-const VALID_KINDS = new Set([...MESSAGE_KINDS, ...INPUT_KINDS]);
+const HANDOFF_KIND = 'handoff';
+const VALID_KINDS = new Set([...MESSAGE_KINDS, ...INPUT_KINDS, HANDOFF_KIND]);
 
 /** Converte o grafo visual (nós + conexões) no formato usado pelo motor de execução. */
 function compileGraph(graph) {
@@ -109,6 +110,7 @@ function compileGraph(graph) {
 
     compiled[node.id] = {
       kind,
+      title: (node.data?.title || '').trim(),
       mensagem: (node.data?.mensagem || '').trim(),
       mediaUrl: (node.data?.mediaUrl || '').trim(),
       opcoes,
@@ -167,6 +169,7 @@ module.exports = {
   CUSTOMERS_FILE,
   MESSAGE_KINDS,
   INPUT_KINDS,
+  HANDOFF_KIND,
   ensureDataDir,
   loadBuilder,
   saveBuilder,
