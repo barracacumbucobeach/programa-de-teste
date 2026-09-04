@@ -12,6 +12,10 @@ data/auth_session/
 # Runtime conversation state — regenerated automatically
 data/estado_clientes.json
 
+# Histórico de conversas e banco de clientes reais — nunca deve ir para o git
+data/conversas.jsonl
+data/clientes.json
+
 *.log
 .DS_Store
 .env

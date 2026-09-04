@@ -14,7 +14,7 @@ const logger = createLogger('server');
  * Cria a API HTTP + WebSocket local usada pelo construtor visual (frontend)
  * para carregar/salvar o fluxo e acompanhar o status da conexão em tempo real.
  */
-function createServer({ whatsapp, flowEngine }) {
+function createServer({ whatsapp, flowEngine, conversationLog, customerStore }) {
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: '2mb' }));
@@ -66,6 +66,25 @@ function createServer({ whatsapp, flowEngine }) {
 
   app.post('/api/session/logout', async (req, res) => {
     await whatsapp.logout();
+    res.json({ ok: true });
+  });
+
+  app.get('/api/conversations', (req, res) => {
+    res.json(conversationLog.listContacts());
+  });
+
+  app.get('/api/conversations/:jid', (req, res) => {
+    const jid = decodeURIComponent(req.params.jid);
+    res.json(conversationLog.getMessages(jid));
+  });
+
+  app.get('/api/customers', (req, res) => {
+    res.json(customerStore.listCustomers());
+  });
+
+  app.delete('/api/customers/:jid', (req, res) => {
+    const jid = decodeURIComponent(req.params.jid);
+    customerStore.deleteCustomer(jid);
     res.json({ ok: true });
   });
 

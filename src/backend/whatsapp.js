@@ -6,9 +6,26 @@ const qrcodeTerminal = require('qrcode-terminal');
 
 const store = require('./store');
 const { createLogger } = require('./logger');
-const { simulateHumanTyping } = require('./humanizer');
+const { simulateHumanPresence } = require('./humanizer');
 
 const logger = createLogger('whatsapp');
+
+/** Monta o payload de envio do Baileys de acordo com o tipo de conteúdo do nó. */
+function buildOutgoingPayload(node) {
+  const caption = node.mensagem || undefined;
+
+  switch (node.kind) {
+    case 'image':
+      return node.mediaUrl ? { image: { url: node.mediaUrl }, caption } : null;
+    case 'video':
+      return node.mediaUrl ? { video: { url: node.mediaUrl }, caption } : null;
+    case 'audio':
+      return node.mediaUrl ? { audio: { url: node.mediaUrl }, mimetype: 'audio/mpeg', ptt: true } : null;
+    case 'text':
+    default:
+      return node.mensagem ? { text: node.mensagem } : null;
+  }
+}
 
 // @whiskeysockets/baileys é distribuído como pacote ESM-only. O Node do
 // sandbox de desenvolvimento suporta require(esm) nativamente, mas o Node
@@ -25,9 +42,10 @@ function loadBaileys() {
 
 /** Gerencia a conexão com o WhatsApp e a execução do fluxo para cada mensagem recebida. */
 class WhatsAppConnection extends EventEmitter {
-  constructor(flowEngine) {
+  constructor(flowEngine, conversationLog) {
     super();
     this.flowEngine = flowEngine;
+    this.conversationLog = conversationLog;
     this.sock = null;
     this.status = 'connecting'; // connecting | qr | connected | disconnected
     this.phone = null;
@@ -117,7 +135,9 @@ class WhatsAppConnection extends EventEmitter {
       ).trim();
 
       this.stats.received += 1;
-      this.emit('message-log', { direction: 'in', jid, text, at: Date.now() });
+      const incomingLog = { direction: 'in', jid, kind: 'text', text, at: Date.now() };
+      this.conversationLog?.append(incomingLog);
+      this.emit('message-log', incomingLog);
 
       let result;
       try {
@@ -128,14 +148,26 @@ class WhatsAppConnection extends EventEmitter {
       }
 
       const node = result?.node;
-      if (!node || !node.mensagem) continue;
+      if (!node) continue;
+
+      const payload = buildOutgoingPayload(node);
+      if (!payload) continue; // nó de mídia sem URL configurada, ou texto vazio
 
       try {
-        await simulateHumanTyping(this.sock, jid, node.mensagem);
-        await this.sock.sendMessage(jid, { text: node.mensagem });
+        const presence = node.kind === 'audio' ? 'recording' : 'composing';
+        await simulateHumanPresence(this.sock, jid, node.mensagem || '', { presence });
+        await this.sock.sendMessage(jid, payload);
 
         this.stats.sent += 1;
-        this.emit('message-log', { direction: 'out', jid, text: node.mensagem, at: Date.now() });
+        const outgoingLog = {
+          direction: 'out',
+          jid,
+          kind: node.kind || 'text',
+          text: node.mensagem || '',
+          at: Date.now(),
+        };
+        this.conversationLog?.append(outgoingLog);
+        this.emit('message-log', outgoingLog);
         this.emitStatus();
       } catch (err) {
         logger.error(`Falha ao enviar mensagem para ${jid}:`, err.message);

@@ -1,18 +1,34 @@
 import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 
+export const KIND_META = {
+  text: { label: 'Texto', icon: '💬', group: 'bubble' },
+  image: { label: 'Imagem', icon: '🖼️', group: 'bubble' },
+  video: { label: 'Vídeo', icon: '🎬', group: 'bubble' },
+  audio: { label: 'Áudio', icon: '🎙️', group: 'bubble' },
+  input_text: { label: 'Texto', icon: '📝', group: 'input', defaultVariable: 'resposta' },
+  input_number: { label: 'Número', icon: '🔢', group: 'input', defaultVariable: 'numero' },
+  input_email: { label: 'E-mail', icon: '✉️', group: 'input', defaultVariable: 'email' },
+  input_phone: { label: 'Telefone', icon: '📞', group: 'input', defaultVariable: 'telefone' },
+};
+
+const MEDIA_KINDS = new Set(['image', 'video', 'audio']);
+
 export default function MessageNode({ id, data }) {
   const isStart = id === 'start';
+  const kind = data.kind || 'text';
+  const meta = KIND_META[kind] || KIND_META.text;
+  const isInput = meta.group === 'input';
   const hasMessage = Boolean(data.mensagem?.trim());
-  const preview = hasMessage ? data.mensagem : 'Clique para escrever a mensagem…';
+  const hasMedia = Boolean(data.mediaUrl?.trim());
 
   return (
-    <div className={`flow-node ${data.selected ? 'is-selected' : ''} ${isStart ? 'is-start' : ''}`}>
+    <div className={`flow-node kind-${kind} ${data.selected ? 'is-selected' : ''} ${isStart ? 'is-start' : ''}`}>
       {!isStart && <Handle type="target" position={Position.Top} className="flow-handle" />}
 
       <div className="flow-node-head">
-        <span className={`flow-node-badge ${isStart ? 'badge-start' : 'badge-message'}`}>
-          {isStart ? '🚀 Início' : '💬 ' + (data.title || 'Resposta')}
+        <span className={`flow-node-badge ${isStart ? 'badge-start' : `badge-${kind}`}`}>
+          {isStart ? '🚀 Início' : `${meta.icon} ${data.title || meta.label}`}
         </span>
         {!isStart && (
           <button
@@ -29,18 +45,38 @@ export default function MessageNode({ id, data }) {
         )}
       </div>
 
-      <p className={`flow-node-body ${hasMessage ? '' : 'is-empty'}`}>{preview}</p>
+      {MEDIA_KINDS.has(kind) && (
+        <div className={`flow-node-media ${hasMedia ? '' : 'is-empty'}`}>
+          {hasMedia ? (
+            kind === 'image' ? (
+              <img src={data.mediaUrl} alt="" className="flow-node-media-preview" />
+            ) : (
+              <span className="flow-node-media-icon">{meta.icon}</span>
+            )
+          ) : (
+            <span>Sem mídia definida</span>
+          )}
+        </div>
+      )}
 
-      <button
-        type="button"
-        className="flow-node-add"
-        onClick={(event) => {
-          event.stopPropagation();
-          data.onAddOption?.();
-        }}
-      >
-        + Nova opção
-      </button>
+      <p className={`flow-node-body ${hasMessage ? '' : 'is-empty'}`}>
+        {hasMessage ? data.mensagem : kind === 'text' || isInput ? 'Clique para escrever a mensagem…' : 'Legenda (opcional)…'}
+      </p>
+
+      {isInput && <div className="flow-node-variable">💾 salva em: {data.variable?.trim() || meta.defaultVariable}</div>}
+
+      {!isInput && (
+        <button
+          type="button"
+          className="flow-node-add"
+          onClick={(event) => {
+            event.stopPropagation();
+            data.onAddOption?.();
+          }}
+        >
+          + Nova opção
+        </button>
+      )}
 
       <Handle type="source" position={Position.Bottom} className="flow-handle" />
     </div>

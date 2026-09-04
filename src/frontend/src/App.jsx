@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -9,23 +9,77 @@ import {
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import TopBar from './components/TopBar.jsx';
-import Sidebar from './components/Sidebar.jsx';
+import Sidebar, { DRAG_MIME } from './components/Sidebar.jsx';
 import NodePanel from './components/NodePanel.jsx';
 import QRModal from './components/QRModal.jsx';
+import ConversationsModal from './components/ConversationsModal.jsx';
+import CustomersModal from './components/CustomersModal.jsx';
 import ToastStack, { useToasts } from './components/ToastStack.jsx';
-import MessageNode from './components/nodes/MessageNode.jsx';
+import MessageNode, { KIND_META } from './components/nodes/MessageNode.jsx';
 import LabeledEdge from './components/edges/LabeledEdge.jsx';
 import { api, connectSocket } from './api.js';
+import { getInitialTheme, applyTheme } from './theme.js';
 
 const nodeTypes = { message: MessageNode };
 const edgeTypes = { labeled: LabeledEdge };
 
 let idCounter = 1;
 const generateId = () => `no_${Date.now().toString(36)}_${idCounter++}`;
+
+/**
+ * Área do quadro (React Flow) isolada num componente próprio só para poder
+ * usar useReactFlow() — o hook exige estar dentro do <ReactFlowProvider>,
+ * que envolve este componente lá embaixo em App().
+ */
+function FlowCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect, onSelectNode, onDeselect, onCreateNodeAt }) {
+  const { screenToFlowPosition } = useReactFlow();
+  const wrapperRef = useRef(null);
+
+  const handleDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+      const kind = event.dataTransfer.getData(DRAG_MIME);
+      if (!kind) return;
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      onCreateNodeAt(kind, position);
+    },
+    [screenToFlowPosition, onCreateNodeAt]
+  );
+
+  const handleDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  return (
+    <div className="canvas-drop-area" ref={wrapperRef} onDrop={handleDrop} onDragOver={handleDragOver}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={(_, node) => onSelectNode(node.id)}
+        onPaneClick={onDeselect}
+        fitView
+        proOptions={{ hideAttribution: true }}
+        defaultEdgeOptions={{ type: 'labeled' }}
+        connectionLineStyle={{ stroke: '#25d366', strokeWidth: 3 }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#243250" />
+        <Controls showInteractive={false} />
+        <MiniMap pannable zoomable nodeColor="#25d366" maskColor="rgba(11,18,32,0.75)" />
+      </ReactFlow>
+    </div>
+  );
+}
 
 export default function App() {
   const [nodes, setNodes] = useState([]);
@@ -42,7 +96,19 @@ export default function App() {
     stats: { received: 0, sent: 0 },
   });
   const [qrOpen, setQrOpen] = useState(false);
+  const [conversationsOpen, setConversationsOpen] = useState(false);
+  const [customersOpen, setCustomersOpen] = useState(false);
+  const [liveMessage, setLiveMessage] = useState(null);
+  const [theme, setTheme] = useState(getInitialTheme);
   const { toasts, pushToast, dismissToast } = useToasts();
+
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => {
+      const next = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +130,7 @@ export default function App() {
 
     const closeSocket = connectSocket((message) => {
       if (message.type === 'status') setStatus(message.payload);
+      if (message.type === 'message-log') setLiveMessage(message.payload);
     });
 
     return () => {
@@ -106,30 +173,50 @@ export default function App() {
     setDirty(true);
   }, []);
 
-  const addNode = useCallback(
+  /** Cria um nó solto no quadro (arrastado ou clicado na paleta), sem conectar automaticamente —
+   *  a ligação entre nós é feita manualmente pelas bordas, como no Typebot. */
+  const createNodeAt = useCallback((kind, position) => {
+    const id = generateId();
+    const meta = KIND_META[kind];
+    const data = { kind, title: meta?.label || 'Nova resposta', mensagem: '', mediaUrl: '' };
+    if (meta?.group === 'input') data.variable = meta.defaultVariable;
+    const newNode = { id, type: 'message', position, data };
+    setNodes((current) => [...current, newNode]);
+    setSelectedNodeId(id);
+    setDirty(true);
+  }, []);
+
+  /** Clique na paleta (sem arrastar): cria o nó numa posição em cascata perto do centro do quadro. */
+  const addNodeFromPalette = useCallback(
+    (kind) => {
+      createNodeAt(kind, { x: 240 + Math.random() * 240, y: 260 + Math.random() * 240 });
+    },
+    [createNodeAt]
+  );
+
+  /** Botão "+ Nova opção" dentro de um nó: cria um novo nó de texto já conectado a ele. */
+  const addConnectedNode = useCallback(
     (fromId) => {
       const id = generateId();
-      const source = fromId ? nodes.find((node) => node.id === fromId) : null;
+      const source = nodes.find((node) => node.id === fromId);
       const position = source
         ? { x: source.position.x + 260, y: source.position.y + (Math.random() * 120 - 60) }
         : { x: 240 + Math.random() * 200, y: 260 + Math.random() * 200 };
 
-      const newNode = { id, type: 'message', position, data: { title: 'Nova resposta', mensagem: '' } };
+      const newNode = { id, type: 'message', position, data: { kind: 'text', title: 'Nova resposta', mensagem: '' } };
       setNodes((current) => [...current, newNode]);
 
-      if (fromId) {
-        const siblingCount = edges.filter((edge) => edge.source === fromId).length;
-        setEdges((current) => [
-          ...current,
-          {
-            id: `e-${fromId}-${id}`,
-            source: fromId,
-            target: id,
-            type: 'labeled',
-            data: { trigger: String(siblingCount + 1) },
-          },
-        ]);
-      }
+      const siblingCount = edges.filter((edge) => edge.source === fromId).length;
+      setEdges((current) => [
+        ...current,
+        {
+          id: `e-${fromId}-${id}`,
+          source: fromId,
+          target: id,
+          type: 'labeled',
+          data: { trigger: String(siblingCount + 1) },
+        },
+      ]);
 
       setSelectedNodeId(id);
       setDirty(true);
@@ -166,7 +253,7 @@ export default function App() {
     data: {
       ...node.data,
       selected: node.id === selectedNodeId,
-      onAddOption: () => addNode(node.id),
+      onAddOption: () => addConnectedNode(node.id),
       onDelete: () => deleteNode(node.id),
     },
   }));
@@ -182,8 +269,10 @@ export default function App() {
         nodes={nodes}
         edges={edges}
         status={status}
-        onAddNode={() => addNode(null)}
+        onAddNode={addNodeFromPalette}
         onOpenQr={() => setQrOpen(true)}
+        onOpenConversations={() => setConversationsOpen(true)}
+        onOpenCustomers={() => setCustomersOpen(true)}
       />
 
       <div className="app-main">
@@ -194,6 +283,8 @@ export default function App() {
           status={status}
           onSave={handleSave}
           onOpenQr={() => setQrOpen(true)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
 
         <div className="canvas-wrap">
@@ -201,24 +292,16 @@ export default function App() {
             <div className="canvas-loading">Carregando fluxo…</div>
           ) : (
             <ReactFlowProvider>
-              <ReactFlow
+              <FlowCanvas
                 nodes={nodesWithHandlers}
                 edges={edgesWithHandlers}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
-                onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-                onPaneClick={() => setSelectedNodeId(null)}
-                fitView
-                proOptions={{ hideAttribution: true }}
-                defaultEdgeOptions={{ type: 'labeled' }}
-              >
-                <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#243250" />
-                <Controls showInteractive={false} />
-                <MiniMap pannable zoomable nodeColor="#25d366" maskColor="rgba(11,18,32,0.75)" />
-              </ReactFlow>
+                onSelectNode={setSelectedNodeId}
+                onDeselect={() => setSelectedNodeId(null)}
+                onCreateNodeAt={createNodeAt}
+              />
             </ReactFlowProvider>
           )}
         </div>
@@ -237,6 +320,8 @@ export default function App() {
       )}
 
       <QRModal open={qrOpen} onClose={() => setQrOpen(false)} status={status} />
+      <ConversationsModal open={conversationsOpen} onClose={() => setConversationsOpen(false)} liveMessage={liveMessage} />
+      <CustomersModal open={customersOpen} onClose={() => setCustomersOpen(false)} pushToast={pushToast} />
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

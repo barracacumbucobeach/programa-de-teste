@@ -55,8 +55,10 @@ src/
     engine.js       # ponto de entrada do motor (API + conexão WhatsApp)
     server.js       # API HTTP + WebSocket local
     whatsapp.js      # conexão Baileys, QR Code, roteamento de mensagens
-    flowEngine.js     # máquina de estados da conversa por cliente
-    humanizer.js       # delays aleatórios + simulação de digitação
+    flowEngine.js     # máquina de estados da conversa + perguntas/variáveis
+    conversationLog.js # histórico de mensagens por contato (data/conversas.jsonl)
+    customerStore.js     # banco de clientes/variáveis (data/clientes.json)
+    humanizer.js       # delays aleatórios + simulação de digitação/gravação
     store.js            # leitura/escrita atômica dos arquivos em data/
     logger.js             # logger colorido compatível com Baileys
   frontend/
@@ -65,10 +67,12 @@ src/
     src/
       App.jsx              # layout principal do builder
       api.js                 # cliente HTTP/WebSocket para o motor local
-      styles.css               # tema visual (dark, estilo profissional)
-      components/                # Sidebar, TopBar, NodePanel, QRModal, Toasts
-      components/nodes/            # nó de mensagem customizado
-      components/edges/              # conexão com rótulo editável (gatilho)
+      theme.js                 # tema claro/escuro (persistido no localStorage)
+      styles.css                 # tema visual (dark + light, estilo profissional)
+      components/                    # Sidebar, TopBar, NodePanel, QRModal, Toasts,
+                                      # ConversationsModal, CustomersModal, ThemeToggle
+      components/nodes/                # nó de fluxo (balão ou pergunta), com preview por tipo
+      components/edges/                  # conexão com rótulo editável (gatilho)
 data/
   fluxo_builder.json   # grafo visual de exemplo (nós, posições, conexões)
   fluxo_bot.json         # fluxo de exemplo já compilado
@@ -112,13 +116,20 @@ Clique no indicador de status (canto superior direito ou barra lateral) para abr
 o QR Code — ele também aparece no terminal onde o motor está rodando. Escaneie com
 **WhatsApp → Mais opções → Aparelhos conectados → Conectar um aparelho**.
 
-### 4. Editar o fluxo
+### 4. Editar o fluxo (estilo Typebot)
 
-- Arraste a partir da borda inferior de um nó até outro nó para criar uma conexão.
-- Clique em **"+ Nova opção"** dentro de um nó para criar automaticamente um novo
-  nó já conectado.
-- Clique em um nó para abrir o painel lateral e editar o **título** e a
-  **mensagem** que o bot enviará.
+- **Arraste um item da barra lateral** ("Balões": Texto/Imagem/Vídeo/Áudio, ou
+  "Perguntas": Texto/Número/E-mail/Telefone) para qualquer ponto do quadro —
+  ou simplesmente clique no item para criá-lo perto do centro. O nó nasce
+  solto, sem conectar a nada.
+- **Conecte os nós manualmente**: arraste a partir do ponto verde na borda
+  inferior de um nó até o ponto verde no topo de outro. Os conectores são
+  propositalmente grandes para facilitar o clique.
+- Clique em **"+ Nova opção"** dentro de um balão para criar rapidamente um
+  novo nó de texto já conectado (atalho para fluxos lineares).
+- Clique em um nó para abrir o painel lateral e editar o **título**, a
+  **mensagem** (sem limite de tamanho — o campo cresce sozinho) e, no caso de
+  imagem/vídeo/áudio, a **URL do arquivo**.
 - Edite o número/palavra de cada conexão diretamente no rótulo sobre a linha —
   é exatamente o que o cliente precisa digitar no WhatsApp para seguir aquele
   caminho.
@@ -127,6 +138,46 @@ o QR Code — ele também aparece no terminal onde o motor está rodando. Escane
 
 Digitar **`menu`**, **`0`** ou **`voltar`** a qualquer momento faz o cliente
 retornar à mensagem inicial.
+
+### 5. Perguntas e variáveis
+
+Um nó de **Pergunta** (Texto/Número/E-mail/Telefone) envia uma mensagem e
+espera a resposta do cliente — a resposta é validada (número, e-mail e
+telefone têm validação própria, com nova tentativa automática se o cliente
+digitar algo inválido) e salva numa **variável** que você nomeia no painel
+lateral (ex.: `nome`, `email`).
+
+Qualquer mensagem seguinte do fluxo — de qualquer tipo de nó — pode usar essa
+variável escrevendo `{{nome}}` no texto. Exemplo de sequência:
+
+```
+[Pergunta: "Qual é o seu nome?"]  → variável: nome
+        ↓
+[Pergunta: "Prazer, {{nome}}! Qual seu e-mail?"]  → variável: email
+        ↓
+[Texto: "Combinado, {{nome}}! Vamos falar com você em {{email}}."]
+```
+
+Cada nó de Pergunta segue sempre para a **única** conexão de saída dele,
+independentemente do texto respondido (diferente dos balões de menu, que
+usam o número/palavra digitado para escolher o caminho).
+
+### 6. Banco de clientes e histórico de conversas
+
+- **🗂️ Clientes** (barra lateral): lista cada contato que já respondeu a uma
+  Pergunta, com todas as variáveis salvas (nome, e-mail, telefone, etc.) e
+  permite **excluir** o registro de um cliente a qualquer momento.
+- **💬 Conversas** (barra lateral): histórico completo de mensagens trocadas
+  com cada contato, em formato de chat, atualizado em tempo real enquanto o
+  painel está aberto.
+
+Ambos são alimentados automaticamente pelo motor — nada precisa ser
+configurado no fluxo para que o histórico e o banco de clientes funcionem.
+
+### 7. Tema claro/escuro
+
+O botão 🌙/☀️ no canto superior direito alterna entre os temas — a escolha
+fica salva no navegador/app e é aplicada automaticamente na próxima abertura.
 
 ## 🛡️ Módulo humanizador anti-banimento
 
@@ -202,9 +253,11 @@ sem nunca sobrescrever um fluxo que você já tenha salvo:
 | Windows | `%APPDATA%\AutoFlow Desktop\data\` |
 | macOS | `~/Library/Application Support/AutoFlow Desktop/data/` |
 
-É lá que ficam o fluxo salvo, a sessão do WhatsApp (`auth_session/`) e o
-estado de conversa de cada cliente — exatamente como em desenvolvimento,
-só que fora da pasta somente-leitura do app instalado.
+É lá que ficam o fluxo salvo, a sessão do WhatsApp (`auth_session/`), o
+estado de conversa de cada cliente, o histórico de mensagens
+(`conversas.jsonl`) e o banco de clientes/variáveis (`clientes.json`) —
+exatamente como em desenvolvimento, só que fora da pasta somente-leitura do
+app instalado.
 
 ## ⚙️ Configuração
 

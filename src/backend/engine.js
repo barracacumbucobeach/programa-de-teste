@@ -3,6 +3,8 @@
 const { createServer } = require('./server');
 const WhatsAppConnection = require('./whatsapp');
 const FlowEngine = require('./flowEngine');
+const ConversationLog = require('./conversationLog');
+const CustomerStore = require('./customerStore');
 const store = require('./store');
 const { createLogger } = require('./logger');
 
@@ -12,10 +14,12 @@ const PORT = process.env.PORT || 4477;
 async function main() {
   store.ensureDataDir();
 
-  const flowEngine = new FlowEngine();
-  const whatsapp = new WhatsAppConnection(flowEngine);
+  const customerStore = new CustomerStore();
+  const flowEngine = new FlowEngine(customerStore);
+  const conversationLog = new ConversationLog();
+  const whatsapp = new WhatsAppConnection(flowEngine, conversationLog);
 
-  const { server } = createServer({ whatsapp, flowEngine });
+  const { server } = createServer({ whatsapp, flowEngine, conversationLog, customerStore });
 
   server.listen(PORT, () => {
     logger.info(`🚀 AutoFlow Desktop — motor ouvindo em http://localhost:${PORT}`);

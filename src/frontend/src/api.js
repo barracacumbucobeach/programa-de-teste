@@ -19,6 +19,10 @@ export const api = {
   getStatus: () => request('/api/status'),
   restartSession: () => request('/api/session/restart', { method: 'POST' }),
   logoutSession: () => request('/api/session/logout', { method: 'POST' }),
+  getConversations: () => request('/api/conversations'),
+  getConversationMessages: (jid) => request(`/api/conversations/${encodeURIComponent(jid)}`),
+  getCustomers: () => request('/api/customers'),
+  deleteCustomer: (jid) => request(`/api/customers/${encodeURIComponent(jid)}`, { method: 'DELETE' }),
 };
 
 /**

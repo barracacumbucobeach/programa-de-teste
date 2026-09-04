@@ -1,4 +1,5 @@
 import React from 'react';
+import ThemeToggle from './ThemeToggle.jsx';
 
 const STATUS_LABEL = {
   connected: 'Conectado ao WhatsApp',
@@ -12,7 +13,7 @@ function formatTime(timestamp) {
   return new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function TopBar({ saving, dirty, lastSavedAt, status, onSave, onOpenQr }) {
+export default function TopBar({ saving, dirty, lastSavedAt, status, onSave, onOpenQr, theme, onToggleTheme }) {
   const subtitle = dirty
     ? 'Alterações não salvas'
     : lastSavedAt
@@ -27,6 +28,8 @@ export default function TopBar({ saving, dirty, lastSavedAt, status, onSave, onO
       </div>
 
       <div className="topbar-actions">
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+
         <button type="button" className={`status-chip status-${status.status}`} onClick={onOpenQr}>
           <span className="dot" />
           {STATUS_LABEL[status.status] || 'Desconectado'}

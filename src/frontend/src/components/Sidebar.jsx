@@ -1,4 +1,5 @@
 import React from 'react';
+import { KIND_META } from './nodes/MessageNode.jsx';
 
 const STATUS_LABEL = {
   connected: 'Conectado',
@@ -7,7 +8,47 @@ const STATUS_LABEL = {
   disconnected: 'Desconectado',
 };
 
-export default function Sidebar({ nodes, edges, status, onAddNode, onOpenQr }) {
+const BUBBLE_PALETTE = [
+  { kind: 'text', ...KIND_META.text },
+  { kind: 'image', ...KIND_META.image },
+  { kind: 'video', ...KIND_META.video },
+  { kind: 'audio', ...KIND_META.audio },
+];
+
+const INPUT_PALETTE = [
+  { kind: 'input_text', ...KIND_META.input_text },
+  { kind: 'input_number', ...KIND_META.input_number },
+  { kind: 'input_email', ...KIND_META.input_email },
+  { kind: 'input_phone', ...KIND_META.input_phone },
+];
+
+export const DRAG_MIME = 'application/autoflow-node';
+
+function PaletteGrid({ items, onAddNode }) {
+  return (
+    <div className="palette-grid">
+      {items.map((item) => (
+        <button
+          key={item.kind}
+          type="button"
+          className={`palette-item palette-${item.kind}`}
+          draggable
+          onDragStart={(event) => {
+            event.dataTransfer.setData(DRAG_MIME, item.kind);
+            event.dataTransfer.effectAllowed = 'move';
+          }}
+          onClick={() => onAddNode(item.kind)}
+          title={`Arraste para o quadro ou clique para adicionar: ${item.label}`}
+        >
+          <span className="palette-icon">{item.icon}</span>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export default function Sidebar({ nodes, edges, status, onAddNode, onOpenQr, onOpenConversations, onOpenCustomers }) {
   const startExists = nodes.some((node) => node.id === 'start');
   const orphanCount = nodes.filter(
     (node) => node.id !== 'start' && !edges.some((edge) => edge.target === node.id)
@@ -23,9 +64,26 @@ export default function Sidebar({ nodes, edges, status, onAddNode, onOpenQr }) {
         </div>
       </div>
 
-      <button type="button" className="btn btn-block btn-ghost" onClick={onAddNode}>
-        ＋ Novo nó de resposta
-      </button>
+      <div className="sidebar-section">
+        <h3>Balões</h3>
+        <p className="palette-hint">Arraste para o quadro (ou clique) para criar um nó, depois conecte pelas bordas.</p>
+        <PaletteGrid items={BUBBLE_PALETTE} onAddNode={onAddNode} />
+      </div>
+
+      <div className="sidebar-section">
+        <h3>Perguntas</h3>
+        <p className="palette-hint">Coletam uma resposta do cliente e salvam numa variável para usar depois.</p>
+        <PaletteGrid items={INPUT_PALETTE} onAddNode={onAddNode} />
+      </div>
+
+      <div className="sidebar-quick-actions">
+        <button type="button" className="btn btn-block btn-ghost" onClick={onOpenConversations}>
+          💬 Conversas
+        </button>
+        <button type="button" className="btn btn-block btn-ghost" onClick={onOpenCustomers}>
+          🗂️ Clientes
+        </button>
+      </div>
 
       <div className="sidebar-section">
         <h3>Diagnóstico do fluxo</h3>
@@ -53,8 +111,8 @@ export default function Sidebar({ nodes, edges, status, onAddNode, onOpenQr }) {
       <div className="sidebar-section sidebar-hint">
         <h3>Como funciona</h3>
         <p>
-          Conecte os nós arrastando das bordas. O texto de cada conexão é o que o cliente precisa
-          digitar no WhatsApp para seguir por aquele caminho.
+          Conecte os nós arrastando das bordas (os pontos verdes maiores). O texto de cada conexão
+          é o que o cliente precisa digitar no WhatsApp para seguir por aquele caminho.
         </p>
       </div>
 

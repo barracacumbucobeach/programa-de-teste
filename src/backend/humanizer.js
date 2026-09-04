@@ -33,18 +33,22 @@ function typingDuration(text = '', { minMs = 2000, maxMs = 6000, msPerChar = 50 
  * @param {import('@whiskeysockets/baileys').WASocket} sock
  * @param {string} jid
  * @param {string} text
+ * @param {{presence?: 'composing'|'recording'}} opts - 'recording' para
+ *   mensagens de áudio (o WhatsApp mostra "gravando áudio…" em vez de
+ *   "digitando…").
  */
-async function simulateHumanTyping(sock, jid, text, opts = {}) {
+async function simulateHumanPresence(sock, jid, text, opts = {}) {
   const preDelayMs = randomDelay(opts.minDelaySeconds ?? 3, opts.maxDelaySeconds ?? 7);
   await delay(preDelayMs);
 
-  await sock.sendPresenceUpdate('composing', jid);
-  const typingMs = typingDuration(text, opts);
-  await delay(typingMs);
+  const presence = opts.presence === 'recording' ? 'recording' : 'composing';
+  await sock.sendPresenceUpdate(presence, jid);
+  const activeMs = typingDuration(text, opts);
+  await delay(activeMs);
 
   await sock.sendPresenceUpdate('paused', jid);
 
-  return { preDelayMs, typingMs };
+  return { preDelayMs, activeMs };
 }
 
-module.exports = { randomDelay, typingDuration, simulateHumanTyping };
+module.exports = { randomDelay, typingDuration, simulateHumanPresence };
