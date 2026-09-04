@@ -1,6 +1,11 @@
 'use strict';
 
-const { delay } = require('@whiskeysockets/baileys');
+/** Pequeno helper local — evita depender do `delay` exportado pelo baileys
+ *  (pacote ESM-only) só para isto, já que o próprio pacote precisa ser
+ *  carregado via import() dinâmico em whatsapp.js. */
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * MÓDULO HUMANIZADOR ANTI-BANIMENTO

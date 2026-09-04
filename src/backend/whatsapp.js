@@ -1,12 +1,6 @@
 'use strict';
 
 const EventEmitter = require('events');
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion,
-} = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 
@@ -15,6 +9,19 @@ const { createLogger } = require('./logger');
 const { simulateHumanTyping } = require('./humanizer');
 
 const logger = createLogger('whatsapp');
+
+// @whiskeysockets/baileys é distribuído como pacote ESM-only. O Node do
+// sandbox de desenvolvimento suporta require(esm) nativamente, mas o Node
+// embutido no Electron empacotado não — por isso o pacote é sempre
+// carregado via import() dinâmico (compatível com os dois ambientes) e
+// cacheado após o primeiro uso.
+let baileysApiPromise = null;
+function loadBaileys() {
+  if (!baileysApiPromise) {
+    baileysApiPromise = import('@whiskeysockets/baileys');
+  }
+  return baileysApiPromise;
+}
 
 /** Gerencia a conexão com o WhatsApp e a execução do fluxo para cada mensagem recebida. */
 class WhatsAppConnection extends EventEmitter {
@@ -26,9 +33,19 @@ class WhatsAppConnection extends EventEmitter {
     this.phone = null;
     this.qrDataUrl = null;
     this.stats = { received: 0, sent: 0 };
+    this.DisconnectReason = null;
   }
 
   async start() {
+    const {
+      default: makeWASocket,
+      useMultiFileAuthState,
+      DisconnectReason,
+      fetchLatestBaileysVersion,
+    } = await loadBaileys();
+
+    this.DisconnectReason = DisconnectReason;
+
     const { state, saveCreds } = await useMultiFileAuthState(store.AUTH_DIR);
     const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }));
 
@@ -63,7 +80,7 @@ class WhatsAppConnection extends EventEmitter {
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      const shouldReconnect = statusCode !== this.DisconnectReason?.loggedOut;
 
       this.status = 'disconnected';
       this.phone = null;

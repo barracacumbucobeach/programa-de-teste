@@ -3,7 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+// Em desenvolvimento os dados ficam em <projeto>/data. Quando empacotado em
+// Electron, main.js define AUTOFLOW_DATA_DIR apontando para uma pasta
+// gravável do usuário (app.getPath('userData')), já que o app instalado
+// costuma ficar num diretório somente leitura.
+const DATA_DIR = process.env.AUTOFLOW_DATA_DIR
+  ? path.resolve(process.env.AUTOFLOW_DATA_DIR)
+  : path.join(__dirname, '..', '..', 'data');
 const AUTH_DIR = path.join(DATA_DIR, 'auth_session');
 const BUILDER_FILE = path.join(DATA_DIR, 'fluxo_builder.json');
 const FLOW_FILE = path.join(DATA_DIR, 'fluxo_bot.json');

@@ -1,6 +1,11 @@
 node_modules/
 dist/
 
+# Instaladores/executáveis gerados pelo electron-builder (npm run dist*) —
+# artefatos de build, não código-fonte. Veja a seção "Gerar o executável"
+# do README para recriá-los.
+release/
+
 # WhatsApp session credentials — sensitive, never commit
 data/auth_session/
 

@@ -75,12 +75,17 @@ export default function App() {
 
   const onNodesChange = useCallback((changes) => {
     setNodes((current) => applyNodeChanges(changes, current));
-    setDirty(true);
+    // Ignora mudanças que o React Flow dispara sozinho ao medir/selecionar
+    // nós (não são edições reais do usuário) para não marcar "não salvo"
+    // logo após carregar um fluxo intocado.
+    const isRealEdit = changes.some((c) => c.type !== 'dimensions' && c.type !== 'select');
+    if (isRealEdit) setDirty(true);
   }, []);
 
   const onEdgesChange = useCallback((changes) => {
     setEdges((current) => applyEdgeChanges(changes, current));
-    setDirty(true);
+    const isRealEdit = changes.some((c) => c.type !== 'select');
+    if (isRealEdit) setDirty(true);
   }, []);
 
   const onConnect = useCallback((params) => {
