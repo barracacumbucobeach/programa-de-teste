@@ -1,0 +1,22 @@
+{
+  "start": {
+    "mensagem": "Olá! Bem-vindo à nossa loja! 👋\nComo posso te ajudar hoje?\n\n1 - Ver Catálogo de Produtos\n2 - Horário de Funcionamento\n3 - Falar com Atendente",
+    "opcoes": {
+      "1": "no_catalogo",
+      "2": "no_horario",
+      "3": "no_atendente"
+    }
+  },
+  "no_catalogo": {
+    "mensagem": "Acesse o nosso catálogo completo através do link: https://loja.exemplo.com/catalogo",
+    "opcoes": {}
+  },
+  "no_horario": {
+    "mensagem": "⏰ Nosso horário de atendimento é de Segunda a Sábado, das 08h às 18h.",
+    "opcoes": {}
+  },
+  "no_atendente": {
+    "mensagem": "👤 Perfeito! Aguarde só um momento que um de nossos atendentes já vai te responder por aqui.",
+    "opcoes": {}
+  }
+}

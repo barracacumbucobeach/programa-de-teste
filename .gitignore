@@ -1,0 +1,12 @@
+node_modules/
+dist/
+
+# WhatsApp session credentials — sensitive, never commit
+data/auth_session/
+
+# Runtime conversation state — regenerated automatically
+data/estado_clientes.json
+
+*.log
+.DS_Store
+.env

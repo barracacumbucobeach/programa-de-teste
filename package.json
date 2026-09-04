@@ -1,0 +1,30 @@
+{
+  "name": "autoflow-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AutoFlow Desktop — construtor visual de fluxos e motor de automação para WhatsApp, 100% local, sem custos de API ou nuvem.",
+  "main": "src/backend/engine.js",
+  "scripts": {
+    "start:engine": "node src/backend/engine.js",
+    "dev:frontend": "vite --config src/frontend/vite.config.js",
+    "build:frontend": "vite build --config src/frontend/vite.config.js",
+    "preview:frontend": "vite preview --config src/frontend/vite.config.js",
+    "dev": "concurrently -k -n ENGINE,BUILDER -c blue,green \"npm:start:engine\" \"npm:dev:frontend\""
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.8",
+    "@xyflow/react": "^12.3.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "vite": "^5.4.0"
+  }
+}

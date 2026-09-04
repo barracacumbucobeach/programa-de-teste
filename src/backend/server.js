@@ -1,0 +1,82 @@
+'use strict';
+
+const http = require('http');
+const express = require('express');
+const cors = require('cors');
+const { WebSocketServer } = require('ws');
+
+const store = require('./store');
+const { createLogger } = require('./logger');
+
+const logger = createLogger('server');
+
+/**
+ * Cria a API HTTP + WebSocket local usada pelo construtor visual (frontend)
+ * para carregar/salvar o fluxo e acompanhar o status da conexão em tempo real.
+ */
+function createServer({ whatsapp, flowEngine }) {
+  const app = express();
+  app.use(cors());
+  app.use(express.json({ limit: '2mb' }));
+
+  const logBuffer = [];
+
+  const server = http.createServer(app);
+  const wss = new WebSocketServer({ server, path: '/ws' });
+
+  function broadcast(message) {
+    const data = JSON.stringify(message);
+    wss.clients.forEach((client) => {
+      if (client.readyState === 1) client.send(data);
+    });
+  }
+
+  function pushLog(entry) {
+    logBuffer.push(entry);
+    if (logBuffer.length > 100) logBuffer.shift();
+    broadcast({ type: 'message-log', payload: entry });
+  }
+
+  app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+  app.get('/api/builder', (req, res) => {
+    res.json(store.loadBuilder());
+  });
+
+  app.post('/api/builder', (req, res) => {
+    try {
+      const compiled = store.saveBuilder(req.body);
+      flowEngine.reload();
+      broadcast({ type: 'flow-updated' });
+      logger.info('💾 Fluxo salvo e ativado.');
+      res.json({ ok: true, compiled });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: err.message });
+    }
+  });
+
+  app.get('/api/status', (req, res) => {
+    res.json({ ...whatsapp.getSnapshot(), logs: logBuffer.slice(-30) });
+  });
+
+  app.post('/api/session/restart', (req, res) => {
+    whatsapp.restart();
+    res.json({ ok: true });
+  });
+
+  app.post('/api/session/logout', async (req, res) => {
+    await whatsapp.logout();
+    res.json({ ok: true });
+  });
+
+  wss.on('connection', (socket) => {
+    socket.send(JSON.stringify({ type: 'status', payload: whatsapp.getSnapshot() }));
+  });
+
+  whatsapp.on('status', (snapshot) => broadcast({ type: 'status', payload: snapshot }));
+  whatsapp.on('message-log', pushLog);
+
+  return { app, server, broadcast };
+}
+
+module.exports = { createServer };
