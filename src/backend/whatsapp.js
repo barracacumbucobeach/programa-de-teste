@@ -60,6 +60,10 @@ class WhatsAppConnection extends EventEmitter {
     // já que só reiniciar (com as mesmas credenciais ruins) nunca resolveria.
     this.consecutiveFailures = 0;
     this.hasAutoRecovered = false;
+    // Só entra em ação se a conexão NUNCA chegou a autenticar de fato nesta
+    // sessão do app — uma sessão que já provou funcionar não deve ser
+    // apagada por causa de uma instabilidade de rede passageira depois.
+    this.hasEverConnected = false;
     // true quando o próprio usuário pediu para desconectar (botão
     // "Desconectar"): nesse caso o motor NÃO tenta reconectar sozinho,
     // fica em repouso ('idle') até um "Conectar" explícito.
@@ -151,12 +155,15 @@ class WhatsAppConnection extends EventEmitter {
       this.consecutiveFailures += 1;
       logger.warn(`Conexão encerrada (código ${statusCode ?? '?'}). Tentativa de reconexão nº ${this.consecutiveFailures}…`);
 
-      if (this.consecutiveFailures >= 3 && !this.hasAutoRecovered) {
-        // Várias quedas seguidas sem nunca exibir QR nem conectar: a sessão
-        // local salva provavelmente está corrompida. Reiniciar sozinho não
-        // resolveria (reusaria as mesmas credenciais quebradas), então limpa
-        // a sessão automaticamente para forçar a geração de um QR Code novo.
-        logger.warn('⚠️ Muitas falhas seguidas — limpando a sessão local automaticamente para gerar um QR novo.');
+      if (this.consecutiveFailures >= 3 && !this.hasAutoRecovered && !this.hasEverConnected) {
+        // Várias quedas seguidas sem NUNCA ter chegado a conectar de fato: a
+        // sessão local salva provavelmente está corrompida. Reiniciar
+        // sozinho não resolveria (reusaria as mesmas credenciais quebradas),
+        // então limpa a sessão automaticamente para forçar um QR Code novo.
+        // Só age quando a conexão nunca funcionou nesta execução — uma
+        // sessão que já esteve conectada não é apagada por instabilidade de
+        // rede passageira depois.
+        logger.warn('⚠️ Muitas falhas seguidas sem nunca conectar — limpando a sessão local automaticamente para gerar um QR novo.');
         this.hasAutoRecovered = true;
         await this.clearSession();
         this.consecutiveFailures = 0;
@@ -169,6 +176,7 @@ class WhatsAppConnection extends EventEmitter {
       this.phone = this.sock?.user?.id?.split(':')[0] || null;
       this.consecutiveFailures = 0;
       this.hasAutoRecovered = false;
+      this.hasEverConnected = true;
       this.emitStatus();
       logger.info('✅ AutoFlow Desktop conectado com sucesso ao WhatsApp!');
     }
@@ -270,6 +278,7 @@ class WhatsAppConnection extends EventEmitter {
     this.qrDataUrl = null;
     this.consecutiveFailures = 0;
     this.hasAutoRecovered = false;
+    this.hasEverConnected = false;
     this.emitStatus();
   }
 
@@ -295,6 +304,7 @@ class WhatsAppConnection extends EventEmitter {
     this.manuallyDisconnected = false;
     this.consecutiveFailures = 0;
     this.hasAutoRecovered = false;
+    this.hasEverConnected = false;
     this.status = 'connecting';
     this.emitStatus();
     await this.start();

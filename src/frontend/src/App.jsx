@@ -193,13 +193,26 @@ export default function App() {
     if (isRealEdit) setDirty(true);
   }, []);
 
-  const onConnect = useCallback((params) => {
-    setEdges((current) => {
-      const nextTrigger = String(current.filter((edge) => edge.source === params.source).length + 1);
-      return addEdge({ ...params, type: 'labeled', data: { trigger: nextTrigger } }, current);
-    });
-    setDirty(true);
-  }, []);
+  const onConnect = useCallback(
+    (params) => {
+      // Nós de "Pergunta" só seguem para UM próximo passo (o painel mostra
+      // "Depois de responder, segue para X"). Se já existir uma conexão
+      // saindo desse nó, uma nova ligação SUBSTITUI a antiga em vez de
+      // apenas se somar a ela — senão a ligação "sobrando" continuava
+      // silenciosamente ativa e o motor sempre usava a primeira criada,
+      // o que parecia um bug aleatório de "loop" para quem estava editando.
+      const sourceKind = nodes.find((node) => node.id === params.source)?.data?.kind;
+      const isSingleNext = sourceKind?.startsWith('input_');
+
+      setEdges((current) => {
+        const base = isSingleNext ? current.filter((edge) => edge.source !== params.source) : current;
+        const nextTrigger = String(base.filter((edge) => edge.source === params.source).length + 1);
+        return addEdge({ ...params, type: 'labeled', data: { trigger: nextTrigger } }, base);
+      });
+      setDirty(true);
+    },
+    [nodes]
+  );
 
   const updateNodeData = useCallback((id, patch) => {
     setNodes((current) => current.map((node) => (node.id === id ? { ...node, data: { ...node.data, ...patch } } : node)));
