@@ -64,7 +64,9 @@ export default function MessageNode({ id, data }) {
 
       <div className="flow-node-head">
         <span className={`flow-node-badge ${isStart ? 'badge-start' : `badge-${kind}`}`}>
-          {isStart ? '🚀 Início' : `${meta.icon} ${data.title || meta.label}`}
+          {isStart
+            ? '🚀 Início'
+            : `${meta.icon} ${data.title || (isInput ? `Pergunta: ${meta.label}` : meta.label)}`}
         </span>
         {!isStart && (
           <button
