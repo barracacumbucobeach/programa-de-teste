@@ -32,6 +32,9 @@ const edgeTypes = { labeled: LabeledEdge };
 let idCounter = 1;
 const generateId = () => `no_${Date.now().toString(36)}_${idCounter++}`;
 
+let optionIdCounter = 1;
+const generateOptionId = () => `opt_${Date.now().toString(36)}_${optionIdCounter++}`;
+
 /** Notificação nativa do sistema operacional (funciona dentro do Electron
  *  sem nenhuma configuração extra) — usada para avisar de um pedido de
  *  atendimento humano mesmo com a janela minimizada/em segundo plano. */
@@ -231,6 +234,7 @@ export default function App() {
     const meta = KIND_META[kind];
     const data = { kind, title: meta?.label || 'Nova resposta', mensagem: '', mediaUrl: '' };
     if (meta?.group === 'input') data.variable = meta.defaultVariable;
+    if (meta?.group === 'bubble') data.options = [];
     const newNode = { id, type: 'message', position, data };
     setNodes((current) => [...current, newNode]);
     setSelectedNodeId(id);
@@ -245,35 +249,72 @@ export default function App() {
     [createNodeAt]
   );
 
-  /** Botão "+ Nova opção" dentro de um nó: cria um novo nó de texto já conectado a ele. */
-  const addConnectedNode = useCallback(
-    (fromId) => {
-      const id = generateId();
-      const source = nodes.find((node) => node.id === fromId);
-      const position = source
-        ? { x: source.position.x + 260, y: source.position.y + (Math.random() * 120 - 60) }
-        : { x: 240 + Math.random() * 200, y: 260 + Math.random() * 200 };
+  /** "+ Adicionar botão" dentro de um balão: só cria o botão nomeado com seu
+   *  próprio conector — a ligação até outro nó é sempre feita à mão pelo
+   *  usuário arrastando a partir dele, como no Typebot. */
+  const addNodeOption = useCallback((nodeId) => {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.id !== nodeId) return node;
+        const options = Array.isArray(node.data.options) ? node.data.options : [];
+        const newOption = { id: generateOptionId(), label: `Opção ${options.length + 1}` };
+        return { ...node, data: { ...node.data, options: [...options, newOption] } };
+      })
+    );
+    setDirty(true);
+  }, []);
 
-      const newNode = { id, type: 'message', position, data: { kind: 'text', title: 'Nova resposta', mensagem: '' } };
-      setNodes((current) => [...current, newNode]);
+  const updateNodeOption = useCallback((nodeId, optionId, label) => {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.id !== nodeId) return node;
+        const options = (node.data.options || []).map((option) =>
+          option.id === optionId ? { ...option, label } : option
+        );
+        return { ...node, data: { ...node.data, options } };
+      })
+    );
+    setDirty(true);
+  }, []);
 
-      const siblingCount = edges.filter((edge) => edge.source === fromId).length;
-      setEdges((current) => [
-        ...current,
+  const removeNodeOption = useCallback((nodeId, optionId) => {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.id !== nodeId) return node;
+        const options = (node.data.options || []).filter((option) => option.id !== optionId);
+        return { ...node, data: { ...node.data, options } };
+      })
+    );
+    // Remove também a conexão que saía especificamente desse botão, se houver.
+    setEdges((current) => current.filter((edge) => !(edge.source === nodeId && edge.sourceHandle === optionId)));
+    setDirty(true);
+  }, []);
+
+  const deleteEdge = useCallback((edgeId) => {
+    setEdges((current) => current.filter((edge) => edge.id !== edgeId));
+    setDirty(true);
+  }, []);
+
+  /** Liga (ou troca) o destino de um botão pelo seletor do painel lateral —
+   *  alternativa ao arrastar o conector do botão direto no quadro; as duas
+   *  formas produzem exatamente a mesma conexão. */
+  const setOptionTarget = useCallback((nodeId, optionId, targetNodeId) => {
+    setEdges((current) => {
+      const withoutOld = current.filter((edge) => !(edge.source === nodeId && edge.sourceHandle === optionId));
+      if (!targetNodeId) return withoutOld;
+      return [
+        ...withoutOld,
         {
-          id: `e-${fromId}-${id}`,
-          source: fromId,
-          target: id,
+          id: `e-${nodeId}-${optionId}-${targetNodeId}`,
+          source: nodeId,
+          sourceHandle: optionId,
+          target: targetNodeId,
           type: 'labeled',
-          data: { trigger: String(siblingCount + 1) },
         },
-      ]);
-
-      setSelectedNodeId(id);
-      setDirty(true);
-    },
-    [nodes, edges]
-  );
+      ];
+    });
+    setDirty(true);
+  }, []);
 
   const deleteNode = useCallback((id) => {
     if (id === 'start') return;
@@ -304,15 +345,21 @@ export default function App() {
     data: {
       ...node.data,
       selected: node.id === selectedNodeId,
-      onAddOption: () => addConnectedNode(node.id),
       onDelete: () => deleteNode(node.id),
       onMensagemChange: (value) => updateNodeData(node.id, { mensagem: value }),
+      onAddNodeOption: () => addNodeOption(node.id),
+      onUpdateNodeOption: (optionId, label) => updateNodeOption(node.id, optionId, label),
+      onRemoveNodeOption: (optionId) => removeNodeOption(node.id, optionId),
     },
   }));
 
   const edgesWithHandlers = edges.map((edge) => ({
     ...edge,
-    data: { ...edge.data, onChange: (value) => updateEdgeTrigger(edge.id, value) },
+    data: {
+      ...edge.data,
+      onChange: (value) => updateEdgeTrigger(edge.id, value),
+      onDelete: () => deleteEdge(edge.id),
+    },
   }));
 
   return (
@@ -368,6 +415,7 @@ export default function App() {
           nodes={nodes}
           onChange={(patch) => updateNodeData(selectedNode.id, patch)}
           onEdgeTriggerChange={updateEdgeTrigger}
+          onSetOptionTarget={(optionId, targetNodeId) => setOptionTarget(selectedNode.id, optionId, targetNodeId)}
           onDelete={() => deleteNode(selectedNode.id)}
           onClose={() => setSelectedNodeId(null)}
         />

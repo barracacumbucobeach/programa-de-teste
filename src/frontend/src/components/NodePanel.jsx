@@ -3,15 +3,15 @@ import { KIND_META } from './nodes/MessageNode.jsx';
 
 const MEDIA_KINDS = new Set(['image', 'video', 'audio']);
 
-/** Cresce junto com o conteúdo (até um teto), para nunca passar a sensação
- *  de que existe um limite de caracteres na mensagem. */
+/** Cresce junto com o conteúdo, sem nenhum teto — sem sensação de limite de tamanho
+ *  (o painel inteiro rola se precisar). */
 function autoResize(el) {
   if (!el) return;
   el.style.height = 'auto';
-  el.style.height = `${Math.min(el.scrollHeight, 480)}px`;
+  el.style.height = `${el.scrollHeight}px`;
 }
 
-export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerChange, onDelete, onClose }) {
+export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerChange, onSetOptionTarget, onDelete, onClose }) {
   const isStart = node.id === 'start';
   const kind = node.data.kind || 'text';
   const meta = KIND_META[kind] || KIND_META.text;
@@ -19,6 +19,11 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
   const isHandoff = meta.group === 'handoff';
   const isMedia = MEDIA_KINDS.has(kind);
   const outgoing = edges.filter((edge) => edge.source === node.id);
+  const options = !isInput && !isHandoff && Array.isArray(node.data.options) ? node.data.options : [];
+  // Conexões que já saem de um botão nomeado do balão aparecem e se editam
+  // ali mesmo (no quadro) — aqui só ficam as "soltas" (sem botão), que usam
+  // gatilho de texto livre (incluindo o curinga "*").
+  const freeOutgoing = outgoing.filter((edge) => !edge.sourceHandle);
 
   const nodeLabel = (targetId) => nodes.find((n) => n.id === targetId)?.data?.title || targetId;
 
@@ -108,6 +113,51 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
         </span>
       </label>
 
+      {!isInput && !isHandoff && (
+        <p className="node-panel-note">
+          💡 Use "+ Adicionar botão" no próprio balão para criar opções numeradas — cada uma vira uma
+          linha na mensagem e ganha seu próprio conector.
+        </p>
+      )}
+
+      {options.length > 0 && (
+        <div className="field">
+          <span>Botões deste balão</span>
+          <ul className="option-list">
+            {options.map((option, index) => {
+              const edge = outgoing.find((e) => e.sourceHandle === option.id);
+              return (
+                <li key={option.id}>
+                  <span className="option-trigger option-trigger-readonly">{index + 1}</span>
+                  <span className="option-target-label" title={option.label}>
+                    {option.label || 'Opção'}
+                  </span>
+                  <span className="option-arrow">→</span>
+                  <select
+                    className="option-target-select"
+                    value={edge?.target || ''}
+                    onChange={(event) => onSetOptionTarget(option.id, event.target.value)}
+                  >
+                    <option value="">Selecione o destino…</option>
+                    {nodes
+                      .filter((n) => n.id !== node.id)
+                      .map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.data?.title || n.id}
+                        </option>
+                      ))}
+                  </select>
+                </li>
+              );
+            })}
+          </ul>
+          <span className="field-hint field-hint-left">
+            Também dá pra ligar arrastando o conector verde do botão até outro balão no quadro — os
+            dois jeitos fazem a mesma coisa.
+          </span>
+        </div>
+      )}
+
       {isHandoff ? (
         <div className="field">
           <span>O que acontece aqui</span>
@@ -125,11 +175,11 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
           </p>
         </div>
       ) : (
-        outgoing.length > 0 && (
+        freeOutgoing.length > 0 && (
           <div className="field">
-            <span>Opções de resposta</span>
+            <span>Outras conexões (gatilho livre)</span>
             <ul className="option-list">
-              {outgoing.map((edge) => (
+              {freeOutgoing.map((edge) => (
                 <li key={edge.id}>
                   <input
                     className="option-trigger"
@@ -142,8 +192,9 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
               ))}
             </ul>
             <span className="field-hint field-hint-left">
-              Use <code>*</code> como gatilho para "qualquer resposta" — útil quando a mensagem já
-              pergunta algo (ex: "como posso te chamar?") em vez de listar opções numeradas.
+              Ligações feitas pela borda inferior do balão (não por um botão nomeado). Use{' '}
+              <code>*</code> como gatilho para "qualquer resposta" — útil quando a mensagem já
+              pergunta algo (ex: "como posso te chamar?") em vez de listar botões.
             </span>
           </div>
         )

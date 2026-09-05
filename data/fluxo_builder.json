@@ -7,33 +7,40 @@
       "data": {
         "kind": "text",
         "title": "Início",
-        "mensagem": "Olá! Bem-vindo à nossa loja! 👋\nComo posso te ajudar hoje?\n\n1 - Ver Catálogo de Produtos\n2 - Horário de Funcionamento\n3 - Falar com Atendente"
+        "mensagem": "Olá! Bem-vindo à nossa loja! 👋\nComo posso te ajudar hoje?",
+        "options": [
+          { "id": "opt_catalogo", "label": "Ver Catálogo de Produtos" },
+          { "id": "opt_horario", "label": "Horário de Funcionamento" },
+          { "id": "opt_atendente", "label": "Falar com Atendente" }
+        ]
       }
     },
     {
       "id": "no_catalogo",
       "type": "message",
-      "position": { "x": 40, "y": 320 },
+      "position": { "x": 40, "y": 340 },
       "data": {
         "kind": "text",
         "title": "Catálogo",
-        "mensagem": "Acesse o nosso catálogo completo através do link: https://loja.exemplo.com/catalogo"
+        "mensagem": "Acesse o nosso catálogo completo através do link: https://loja.exemplo.com/catalogo",
+        "options": []
       }
     },
     {
       "id": "no_horario",
       "type": "message",
-      "position": { "x": 400, "y": 320 },
+      "position": { "x": 400, "y": 340 },
       "data": {
         "kind": "text",
         "title": "Horário",
-        "mensagem": "⏰ Nosso horário de atendimento é de Segunda a Sábado, das 08h às 18h."
+        "mensagem": "⏰ Nosso horário de atendimento é de Segunda a Sábado, das 08h às 18h.",
+        "options": []
       }
     },
     {
       "id": "no_atendente",
       "type": "message",
-      "position": { "x": 760, "y": 320 },
+      "position": { "x": 760, "y": 340 },
       "data": {
         "kind": "handoff",
         "title": "Atendente",
@@ -46,22 +53,22 @@
       "id": "e-start-catalogo",
       "source": "start",
       "target": "no_catalogo",
-      "type": "labeled",
-      "data": { "trigger": "1" }
+      "sourceHandle": "opt_catalogo",
+      "type": "labeled"
     },
     {
       "id": "e-start-horario",
       "source": "start",
       "target": "no_horario",
-      "type": "labeled",
-      "data": { "trigger": "2" }
+      "sourceHandle": "opt_horario",
+      "type": "labeled"
     },
     {
       "id": "e-start-atendente",
       "source": "start",
       "target": "no_atendente",
-      "type": "labeled",
-      "data": { "trigger": "3" }
+      "sourceHandle": "opt_atendente",
+      "type": "labeled"
     }
   ]
 }

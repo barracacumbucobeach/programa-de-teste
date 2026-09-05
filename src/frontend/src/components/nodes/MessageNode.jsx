@@ -1,11 +1,11 @@
 import React, { useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
-/** Cresce junto com o conteúdo (até um teto), sem sensação de limite de tamanho. */
+/** Cresce junto com o conteúdo, sem nenhum teto — sem sensação de limite de tamanho. */
 function autoResize(el) {
   if (!el) return;
   el.style.height = 'auto';
-  el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  el.style.height = `${el.scrollHeight}px`;
 }
 
 export const KIND_META = {
@@ -28,6 +28,11 @@ export default function MessageNode({ id, data }) {
   const meta = KIND_META[kind] || KIND_META.text;
   const isInput = meta.group === 'input';
   const isHandoff = meta.group === 'handoff';
+  // Balões (texto/imagem/vídeo/áudio) podem ter botões nomeados, cada um com
+  // seu próprio conector — como no Typebot. Perguntas e o nó de atendente
+  // continuam com um único caminho de saída (fazem sentido sem múltiplas opções).
+  const supportsOptions = !isInput && !isHandoff;
+  const options = supportsOptions && Array.isArray(data.options) ? data.options : [];
   const hasMedia = Boolean(data.mediaUrl?.trim());
   const textareaRef = useCallback((el) => autoResize(el), [data.mensagem]);
 
@@ -89,16 +94,45 @@ export default function MessageNode({ id, data }) {
       {isInput && <div className="flow-node-variable">💾 salva em: {data.variable?.trim() || meta.defaultVariable}</div>}
       {isHandoff && <div className="flow-node-handoff-hint">🙋 Pausa o bot e avisa a loja</div>}
 
-      {!isInput && !isHandoff && (
+      {supportsOptions && options.length > 0 && (
+        <div className="flow-node-options">
+          {options.map((option, index) => (
+            <div key={option.id} className="flow-node-option-row">
+              <span className="flow-node-option-index">{index + 1}</span>
+              <input
+                className="flow-node-option-input nodrag"
+                value={option.label}
+                onChange={(event) => data.onUpdateNodeOption?.(option.id, event.target.value)}
+                onClick={(event) => event.stopPropagation()}
+                placeholder="Nome do botão"
+              />
+              <button
+                type="button"
+                className="flow-node-option-remove nodrag"
+                title="Remover botão"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  data.onRemoveNodeOption?.(option.id);
+                }}
+              >
+                ✕
+              </button>
+              <Handle type="source" position={Position.Right} id={option.id} className="flow-handle flow-handle-option" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {supportsOptions && (
         <button
           type="button"
           className="flow-node-add"
           onClick={(event) => {
             event.stopPropagation();
-            data.onAddOption?.();
+            data.onAddNodeOption?.();
           }}
         >
-          + Nova opção
+          + Adicionar botão
         </button>
       )}
 

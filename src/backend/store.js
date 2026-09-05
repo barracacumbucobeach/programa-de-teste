@@ -99,19 +99,43 @@ function compileGraph(graph) {
 
   for (const node of graph.nodes) {
     const outgoing = graph.edges.filter((edge) => edge.source === node.id);
+    const options = Array.isArray(node.data?.options) ? node.data.options : [];
     const opcoes = {};
+    let mensagem = (node.data?.mensagem || '').trim();
 
-    outgoing.forEach((edge) => {
-      const gatilho = String(edge.data?.trigger ?? edge.label ?? '1').trim();
-      if (gatilho) opcoes[gatilho] = edge.target;
-    });
+    // Botões nomeados (cada um com seu próprio conector, ligado à mão pelo
+    // usuário): viram uma lista numerada anexada ao final da mensagem, e o
+    // gatilho de cada um é a própria posição na lista (1, 2, 3…).
+    if (options.length > 0) {
+      const optionLines = [];
+      options.forEach((option, index) => {
+        const edge = outgoing.find((e) => e.sourceHandle === option.id);
+        if (!edge) return; // botão criado mas ainda sem conexão: ignorado até ser ligado
+        const trigger = String(index + 1);
+        opcoes[trigger] = edge.target;
+        optionLines.push(`${trigger} - ${(option.label || '').trim() || 'Opção'}`);
+      });
+      if (optionLines.length > 0) {
+        mensagem = mensagem ? `${mensagem}\n\n${optionLines.join('\n')}` : optionLines.join('\n');
+      }
+    }
+
+    // Conexões "soltas" (feitas pela borda inferior comum, sem passar por um
+    // botão nomeado) continuam com gatilho de texto livre — inclui o
+    // curinga "*", que casa quando nenhuma opção numerada bate.
+    outgoing
+      .filter((edge) => !edge.sourceHandle || !options.some((option) => option.id === edge.sourceHandle))
+      .forEach((edge) => {
+        const gatilho = String(edge.data?.trigger ?? edge.label ?? '1').trim();
+        if (gatilho) opcoes[gatilho] = edge.target;
+      });
 
     const kind = VALID_KINDS.has(node.data?.kind) ? node.data.kind : 'text';
 
     compiled[node.id] = {
       kind,
       title: (node.data?.title || '').trim(),
-      mensagem: (node.data?.mensagem || '').trim(),
+      mensagem,
       mediaUrl: (node.data?.mediaUrl || '').trim(),
       opcoes,
     };
