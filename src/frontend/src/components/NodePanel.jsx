@@ -127,6 +127,24 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
         </label>
       )}
 
+      {isStart && isInput && (
+        <label className="field">
+          <span>Mensagem para quem já falou antes (opcional)</span>
+          <textarea
+            rows={3}
+            value={node.data.mensagemRetorno || ''}
+            onChange={(event) => onChange({ mensagemRetorno: event.target.value })}
+            placeholder={`Ex: Oi de novo, {{${node.data.variable?.trim() || meta.defaultVariable}}}! Que bom te ver por aqui outra vez.`}
+          />
+          <span className="field-hint field-hint-left">
+            Se o cliente já respondeu essa pergunta antes e sumir por um tempo (6h) antes de
+            mandar mensagem de novo, o bot pula a pergunta — já sabe a resposta — e manda esse
+            texto no lugar, seguido das opções do próximo passo. Deixe em branco para sempre
+            perguntar de novo.
+          </span>
+        </label>
+      )}
+
       <label className="field">
         <span>
           {isInput ? 'Pergunta enviada ao cliente' : isHandoff ? 'Mensagem antes de transferir (opcional)' : kind === 'text' ? 'Mensagem enviada' : 'Legenda (opcional)'}

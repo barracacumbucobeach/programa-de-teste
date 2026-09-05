@@ -6,6 +6,16 @@ const store = require('./store');
 /** Palavras-chave que qualquer cliente pode digitar a qualquer momento para voltar ao início. */
 const RESET_KEYWORDS = new Set(['menu', '0', 'inicio', 'início', 'voltar']);
 
+/**
+ * Depois de ficar tanto tempo sem mandar mensagem, um cliente que volta a
+ * falar é tratado como "recomeçando" (não continua de onde parou) — só que,
+ * como já conhecemos o nome/telefone dele, a pergunta inicial pode ser
+ * pulada (ver "mensagemRetorno" no nó inicial). Ajustável se preferir outro
+ * prazo — 6h cobre bem "sumiu de manhã, voltou à tarde" sem tratar uma
+ * resposta demorada da mesma conversa como se fosse gente nova.
+ */
+const SESSION_TIMEOUT_MS = 6 * 60 * 60 * 1000;
+
 const INPUT_VALIDATORS = {
   input_text: () => true,
   input_number: (text) => /^-?\d+([.,]\d+)?$/.test(text.trim()),
@@ -45,8 +55,16 @@ class FlowEngine extends EventEmitter {
   }
 
   setState(jid, key) {
-    this.clientStates[jid] = key;
+    this.clientStates[jid] = { key, at: Date.now() };
     store.saveClientStateDebounced(this.clientStates);
+  }
+
+  /** Lê o estado salvo de um cliente, aceitando o formato antigo (só a
+   *  chave do nó, sem horário) salvo por versões anteriores do app. */
+  _getState(jid) {
+    const raw = this.clientStates[jid];
+    if (!raw) return null;
+    return typeof raw === 'string' ? { key: raw, at: 0 } : raw;
   }
 
   _withVariables(node, jid) {
@@ -81,12 +99,51 @@ class FlowEngine extends EventEmitter {
   }
 
   /**
+   * Cliente conhecido que sumiu por um tempo e voltou a falar: reinicia a
+   * conversa do zero (não continua de onde parou) — mas, se o nó inicial é
+   * uma Pergunta cuja resposta já está salva e tem uma "mensagem de
+   * retorno" configurada, pula a pergunta (já sabe a resposta) e manda essa
+   * mensagem no lugar, direto seguida das opções do próximo passo.
+   */
+  _renderReturning(jid) {
+    const startNode = this.flow.start;
+    const variables = this.customerStore?.getVariables(jid) || {};
+    const target = startNode?.next ? this.flow[startNode.next] : null;
+
+    const canSkipQuestion = startNode?.variable && variables[startNode.variable] && startNode.mensagemRetorno && target;
+
+    if (!canSkipQuestion) {
+      this.setState(jid, 'start');
+      return this._render('start', jid);
+    }
+
+    const greeting = renderTemplate(startNode.mensagemRetorno, variables);
+    const mensagem = target.opcoesTexto ? `${greeting}\n\n${target.opcoesTexto}` : greeting;
+
+    this.setState(jid, startNode.next);
+
+    if (target.kind === 'handoff') {
+      const handoff = this.customerStore?.requestHandoff(jid, { nodeTitle: target.title || startNode.next });
+      this.emit('handoff', {
+        jid,
+        phone: jid.split('@')[0],
+        nodeKey: startNode.next,
+        nodeTitle: target.title || startNode.next,
+        at: handoff?.requestedAt || Date.now(),
+      });
+    }
+
+    return { key: startNode.next, node: { ...target, mensagem }, isWelcome: true };
+  }
+
+  /**
    * @returns {{ key: string, node: object|null, isWelcome: boolean, unmatched?: boolean, paused?: boolean }}
    */
   resolveNextNode(jid, rawText) {
     const text = (rawText || '').trim();
     const normalized = text.toLowerCase();
-    const isNewClient = !(jid in this.clientStates);
+    const state = this._getState(jid);
+    const isNewClient = !state;
     const isPaused = !isNewClient && this.customerStore?.isHandoffPending(jid);
 
     if (isPaused) {
@@ -98,15 +155,28 @@ class FlowEngine extends EventEmitter {
       // Um atendente humano está cuidando desta conversa — o bot fica em
       // silêncio (a mensagem ainda é registrada no histórico, só não gera
       // resposta automática) até ser marcada como resolvida.
-      return { key: this.clientStates[jid], node: null, isWelcome: false, paused: true };
+      return { key: state.key, node: null, isWelcome: false, paused: true };
     }
 
-    if (isNewClient || RESET_KEYWORDS.has(normalized)) {
+    if (isNewClient) {
       this.setState(jid, 'start');
       return this._render('start', jid);
     }
 
-    const currentKey = this.clientStates[jid];
+    if (RESET_KEYWORDS.has(normalized)) {
+      // Pedido explícito de voltar ao início: sempre mostra o começo de
+      // verdade (pergunta incluída), mesmo que o cliente já seja conhecido.
+      this.setState(jid, 'start');
+      return this._render('start', jid);
+    }
+
+    // Cliente conhecido que ficou tempo demais sem mandar mensagem: prefere
+    // recomeçar do início a continuar de onde parou (ver SESSION_TIMEOUT_MS).
+    if (Date.now() - state.at > SESSION_TIMEOUT_MS) {
+      return this._renderReturning(jid);
+    }
+
+    const currentKey = state.key;
     const currentNode = this.flow[currentKey];
 
     if (!currentNode) {
@@ -120,6 +190,7 @@ class FlowEngine extends EventEmitter {
       const validator = INPUT_VALIDATORS[currentNode.kind] || (() => true);
 
       if (!validator(text)) {
+        this.setState(jid, currentKey); // continua no mesmo passo, mas atualiza "última vez que falou"
         const invalidMessage = INVALID_MESSAGES[currentNode.kind] || 'Não entendi, pode tentar de novo?';
         return { key: currentKey, node: { ...currentNode, mensagem: invalidMessage }, isWelcome: false, unmatched: true };
       }
@@ -155,7 +226,9 @@ class FlowEngine extends EventEmitter {
       return this._render(nextKey, jid);
     }
 
-    // Nenhuma opção reconhecida: repete a mensagem atual (o cliente permanece na mesma etapa).
+    // Nenhuma opção reconhecida: repete a mensagem atual (o cliente permanece na mesma etapa,
+    // mas ainda está "presente" — atualiza a hora, pra não ser tratado como sumido depois).
+    this.setState(jid, currentKey);
     return { key: currentKey, node: this._withVariables(currentNode, jid), isWelcome: false, unmatched: true };
   }
 }

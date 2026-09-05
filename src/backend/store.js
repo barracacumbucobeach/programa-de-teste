@@ -111,6 +111,12 @@ function compileGraph(graph) {
     // Botões nomeados (cada um com seu próprio conector, ligado à mão pelo
     // usuário): viram uma lista numerada anexada ao final da mensagem, e o
     // gatilho de cada um é a própria posição na lista (1, 2, 3…).
+    // Guardada à parte (além de já embutida em "mensagem") porque o motor
+    // precisa remontar só a lista de opções — sem o texto de saudação —
+    // quando troca a saudação por uma "mensagem de retorno" pra quem já
+    // falou com o bot antes.
+    let opcoesTexto = '';
+
     if (options.length > 0) {
       const optionLines = [];
       options.forEach((option, index) => {
@@ -121,7 +127,8 @@ function compileGraph(graph) {
         optionLines.push(`${trigger} - ${(option.label || '').trim() || 'Opção'}`);
       });
       if (optionLines.length > 0) {
-        mensagem = mensagem ? `${mensagem}\n\n${optionLines.join('\n')}` : optionLines.join('\n');
+        opcoesTexto = optionLines.join('\n');
+        mensagem = mensagem ? `${mensagem}\n\n${opcoesTexto}` : opcoesTexto;
       }
     }
 
@@ -145,12 +152,18 @@ function compileGraph(graph) {
       mediaUrl: (node.data?.mediaUrl || '').trim(),
       opcoes,
     };
+    if (opcoesTexto) compiled[node.id].opcoesTexto = opcoesTexto;
 
     if (INPUT_KINDS.has(kind)) {
       compiled[node.id].variable = (node.data?.variable || '').trim() || 'resposta';
       // Nó de pergunta: segue sempre para a primeira (única) conexão de saída,
       // independentemente do texto que o cliente responder.
       compiled[node.id].next = outgoing[0]?.target || null;
+      // Mensagem alternativa para quando o cliente que responde essa pergunta
+      // já é conhecido (voltou a falar depois de um tempo): pula a pergunta
+      // (a resposta já está salva) e usa esse texto no lugar dela.
+      const mensagemRetorno = (node.data?.mensagemRetorno || '').trim();
+      if (mensagemRetorno) compiled[node.id].mensagemRetorno = mensagemRetorno;
     }
   }
 
