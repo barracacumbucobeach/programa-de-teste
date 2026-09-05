@@ -199,11 +199,11 @@ export default function App() {
   const onConnect = useCallback((params) => {
     // Uma ligação "solta" (puxada do conector de baixo, sem passar por um
     // botão nomeado) representa o próximo passo natural do balão — segue
-    // sempre, sem exigir que o cliente digite nenhum número. Como só faz
-    // sentido UM próximo passo natural por balão, uma nova ligação assim
-    // SUBSTITUI a anterior (se houver) em vez de se somar a ela — senão as
-    // duas ficavam ativas disputando o mesmo gatilho "*", e só uma vencia
-    // silenciosamente, parecendo um bug aleatório de rota errada.
+    // sempre, sem número, sem asterisco, sem nada pra configurar. Como só
+    // faz sentido UM próximo passo natural por balão, uma nova ligação
+    // assim SUBSTITUI a anterior (se houver) em vez de se somar a ela —
+    // senão as duas ficavam ativas disputando o mesmo caminho, e só uma
+    // vencia silenciosamente, parecendo um bug aleatório de rota errada.
     //
     // Só vira uma escolha numerada quando o usuário adiciona botões
     // nomeados ao balão (cada um com seu próprio conector e seu próprio
@@ -216,18 +216,13 @@ export default function App() {
       const base = isFreeConnection
         ? current.filter((edge) => edge.source !== params.source || edge.sourceHandle)
         : current;
-      return addEdge({ ...params, type: 'labeled', data: isFreeConnection ? { trigger: '*' } : {} }, base);
+      return addEdge({ ...params, type: 'labeled', data: {} }, base);
     });
     setDirty(true);
   }, []);
 
   const updateNodeData = useCallback((id, patch) => {
     setNodes((current) => current.map((node) => (node.id === id ? { ...node, data: { ...node.data, ...patch } } : node)));
-    setDirty(true);
-  }, []);
-
-  const updateEdgeTrigger = useCallback((id, trigger) => {
-    setEdges((current) => current.map((edge) => (edge.id === id ? { ...edge, data: { ...edge.data, trigger } } : edge)));
     setDirty(true);
   }, []);
 
@@ -361,7 +356,6 @@ export default function App() {
     ...edge,
     data: {
       ...edge.data,
-      onChange: (value) => updateEdgeTrigger(edge.id, value),
       onDelete: () => deleteEdge(edge.id),
     },
   }));
@@ -418,7 +412,6 @@ export default function App() {
           edges={edges}
           nodes={nodes}
           onChange={(patch) => updateNodeData(selectedNode.id, patch)}
-          onEdgeTriggerChange={updateEdgeTrigger}
           onSetOptionTarget={(optionId, targetNodeId) => setOptionTarget(selectedNode.id, optionId, targetNodeId)}
           onDelete={() => deleteNode(selectedNode.id)}
           onClose={() => setSelectedNodeId(null)}

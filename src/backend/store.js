@@ -133,17 +133,16 @@ function compileGraph(graph) {
     }
 
     // Conexões "soltas" (feitas pela borda inferior comum, sem passar por um
-    // botão nomeado) continuam com gatilho de texto livre — inclui o
-    // curinga "*", que casa quando nenhuma opção numerada bate. Um botão
-    // nomeado sempre tem prioridade sobre uma ligação solta que por acaso
-    // caia no mesmo número (ex.: um "1" solto feito sem querer não pode
-    // roubar o gatilho do botão "1 - Catálogo").
-    outgoing
-      .filter((edge) => !edge.sourceHandle || !options.some((option) => option.id === edge.sourceHandle))
-      .forEach((edge) => {
-        const gatilho = String(edge.data?.trigger ?? edge.label ?? '*').trim();
-        if (gatilho && !(gatilho in opcoes)) opcoes[gatilho] = edge.target;
-      });
+    // botão nomeado) sempre seguem — não existe mais gatilho de texto livre
+    // configurável pelo usuário nem número/asterisco pra se preocupar: o
+    // desenho da ligação é a própria regra. Ignora de propósito qualquer
+    // "trigger" antigo que porventura já esteja salvo num fluxo de antes
+    // dessa mudança (ex.: um "1" automático de versões anteriores), pra não
+    // sobrar nenhuma ligação simples ainda exigindo um número digitado. Só
+    // a primeira ligação solta de um nó é usada — um botão nomeado sempre
+    // tem prioridade sobre ela.
+    const freeEdge = outgoing.find((edge) => !edge.sourceHandle || !options.some((option) => option.id === edge.sourceHandle));
+    if (freeEdge && !('*' in opcoes)) opcoes['*'] = freeEdge.target;
 
     compiled[node.id] = {
       kind,

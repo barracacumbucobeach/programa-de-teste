@@ -17,7 +17,7 @@ function autoResize(el) {
   el.style.height = `${el.scrollHeight}px`;
 }
 
-export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerChange, onSetOptionTarget, onDelete, onClose }) {
+export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTarget, onDelete, onClose }) {
   const isStart = node.id === 'start';
   const kind = node.data.kind || 'text';
   const meta = KIND_META[kind] || KIND_META.text;
@@ -237,26 +237,17 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
       ) : (
         freeOutgoing.length > 0 && (
           <div className="field">
-            <span>Outras conexões (gatilho livre)</span>
+            <span>Depois desta mensagem, segue para</span>
             <ul className="option-list">
               {freeOutgoing.map((edge) => (
                 <li key={edge.id}>
-                  <input
-                    className="option-trigger"
-                    value={edge.data?.trigger ?? ''}
-                    onChange={(event) => onEdgeTriggerChange(edge.id, event.target.value)}
-                  />
-                  <span className="option-arrow">→</span>
-                  <span className="option-target">{nodeLabel(edge.target)}</span>
+                  <span className="option-target">→ {nodeLabel(edge.target)}</span>
                 </li>
               ))}
             </ul>
             <span className="field-hint field-hint-left">
-              Ligações feitas pela borda inferior do balão (não por um botão nomeado) já vêm com{' '}
-              <code>*</code> — seguem sempre, sem o cliente precisar digitar nada específico. Só
-              troque esse campo se quiser que essa ligação só siga quando o cliente digitar
-              exatamente uma palavra (avançado); para dar opções de escolha pro cliente, use
-              "+ Adicionar botão" no balão em vez disso.
+              Segue automaticamente, sem o cliente precisar digitar nada. Pra dar opções de
+              escolha, use "+ Adicionar botão" no próprio balão em vez de ligar por aqui.
             </span>
           </div>
         )
