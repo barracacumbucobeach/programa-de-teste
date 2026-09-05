@@ -192,6 +192,18 @@ class WhatsAppConnection extends EventEmitter {
       const jid = msg.key.remoteJid;
       if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') continue;
 
+      // Contas que o WhatsApp já migrou para o identificador "LID" chegam
+      // com um remoteJid do tipo 182659855166@lid — um código interno de
+      // privacidade, não o número de telefone do cliente. Nesse caso o
+      // Baileys ainda informa o número real em key.senderPn; usamos ele
+      // como identidade do cliente (estado da conversa, variáveis salvas,
+      // telefone exibido no painel), senão a mesma pessoa pode virar dois
+      // "clientes" diferentes conforme o WhatsApp alterna entre os dois
+      // identificadores, e o telefone salvo fica um número sem sentido. O
+      // envio da resposta continua sempre pelo jid original (é o que
+      // realmente entrega a mensagem de volta para esse chat).
+      const customerId = jid.endsWith('@lid') && msg.key.senderPn ? msg.key.senderPn : jid;
+
       const text = (
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
@@ -200,13 +212,13 @@ class WhatsAppConnection extends EventEmitter {
       ).trim();
 
       this.stats.received += 1;
-      const incomingLog = { direction: 'in', jid, kind: 'text', text, at: Date.now() };
+      const incomingLog = { direction: 'in', jid: customerId, kind: 'text', text, at: Date.now() };
       this.conversationLog?.append(incomingLog);
       this.emit('message-log', incomingLog);
 
       let result;
       try {
-        result = this.flowEngine.resolveNextNode(jid, text);
+        result = this.flowEngine.resolveNextNode(customerId, text);
       } catch (err) {
         logger.error('Falha ao resolver o fluxo:', err.message);
         continue;
@@ -226,7 +238,7 @@ class WhatsAppConnection extends EventEmitter {
         this.stats.sent += 1;
         const outgoingLog = {
           direction: 'out',
-          jid,
+          jid: customerId,
           kind: node.kind || 'text',
           text: node.mensagem || '',
           at: Date.now(),
