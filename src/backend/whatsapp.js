@@ -117,7 +117,7 @@ class WhatsAppConnection extends EventEmitter {
       version,
       logger,
       printQRInTerminal: false,
-      browser: ['AutoFlow Desktop', 'Chrome', '1.0.0'],
+      browser: ['Fluxia Desktop', 'Chrome', '1.0.0'],
       syncFullHistory: false,
     });
 
@@ -197,7 +197,7 @@ class WhatsAppConnection extends EventEmitter {
       this.hasAutoRecovered = false;
       this.hasEverConnected = true;
       this.emitStatus();
-      logger.info('✅ AutoFlow Desktop conectado com sucesso ao WhatsApp!');
+      logger.info('✅ Fluxia Desktop conectado com sucesso ao WhatsApp!');
     }
   }
 

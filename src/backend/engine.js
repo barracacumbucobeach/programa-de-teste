@@ -22,14 +22,14 @@ async function main() {
   const { server } = createServer({ whatsapp, flowEngine, conversationLog, customerStore });
 
   server.listen(PORT, () => {
-    logger.info(`🚀 AutoFlow Desktop — motor ouvindo em http://localhost:${PORT}`);
+    logger.info(`🚀 Fluxia Desktop — motor ouvindo em http://localhost:${PORT}`);
     logger.info('   Abra o construtor visual (npm run dev:frontend) para editar o fluxo e ler o QR Code.');
   });
 
   await whatsapp.start();
 
   const shutdown = () => {
-    logger.info('👋 Encerrando AutoFlow Desktop...');
+    logger.info('👋 Encerrando Fluxia Desktop...');
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

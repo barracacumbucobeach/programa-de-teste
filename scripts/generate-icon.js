@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Gera o ícone mestre do AutoFlow Desktop (build/icon.png, 1024×1024) sem
+ * Gera o ícone mestre do Fluxia Desktop (build/icon.png, 1024×1024) sem
  * depender de nenhuma biblioteca externa de imagem — apenas o módulo
  * `zlib` do próprio Node para codificar o PNG.
  *

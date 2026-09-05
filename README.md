@@ -1,4 +1,4 @@
-# ⚡ AutoFlow Desktop
+# ⚡ Fluxia Desktop
 
 Construtor visual de fluxos e motor de automação para WhatsApp que roda **100% local**
 no seu computador — sem custos de API externa, sem servidores em nuvem e sem mensalidade.
@@ -223,10 +223,10 @@ npm run dist:mac        # .dmg (Intel e Apple Silicon)
 Os arquivos finais saem em `release/` (pasta ignorada pelo git — são
 artefatos de build, não código-fonte):
 
-- **Linux:** `release/AutoFlow Desktop-<versão>.AppImage` (portátil, basta dar
-  permissão de execução: `chmod +x`) e `release/autoflow-desktop_<versão>_amd64.deb`.
-- **Windows:** `release/AutoFlow Desktop Setup <versão>.exe`.
-- **macOS:** `release/AutoFlow Desktop-<versão>.dmg`.
+- **Linux:** `release/Fluxia Desktop-<versão>.AppImage` (portátil, basta dar
+  permissão de execução: `chmod +x`) e `release/fluxia-desktop_<versão>_amd64.deb`.
+- **Windows:** `release/Fluxia Desktop Setup <versão>.exe`.
+- **macOS:** `release/Fluxia Desktop-<versão>.dmg`.
 
 > Gerar o instalador de Windows/macOS a partir de outro sistema operacional
 > pode exigir ferramentas adicionais (ex.: Wine para NSIS fora do Windows).
@@ -249,9 +249,9 @@ sem nunca sobrescrever um fluxo que você já tenha salvo:
 
 | Sistema | Pasta de dados |
 |---|---|
-| Linux | `~/.config/AutoFlow Desktop/data/` |
-| Windows | `%APPDATA%\AutoFlow Desktop\data\` |
-| macOS | `~/Library/Application Support/AutoFlow Desktop/data/` |
+| Linux | `~/.config/Fluxia Desktop/data/` |
+| Windows | `%APPDATA%\Fluxia Desktop\data\` |
+| macOS | `~/Library/Application Support/Fluxia Desktop/data/` |
 
 É lá que ficam o fluxo salvo, a sessão do WhatsApp (`auth_session/`), o
 estado de conversa de cada cliente, o histórico de mensagens

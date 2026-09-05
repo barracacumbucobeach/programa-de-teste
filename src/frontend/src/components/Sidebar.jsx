@@ -103,7 +103,7 @@ export default function Sidebar({
       <div className="sidebar-brand">
         <div className="brand-mark">⚡</div>
         <div className="brand-text">
-          <h1>AutoFlow</h1>
+          <h1>Fluxia</h1>
           <span>Desktop</span>
         </div>
       </div>
