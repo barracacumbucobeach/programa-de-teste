@@ -124,7 +124,13 @@ function compileGraph(graph) {
         if (!edge) return; // botão criado mas ainda sem conexão: ignorado até ser ligado
         const trigger = String(index + 1);
         opcoes[trigger] = edge.target;
-        optionLines.push(`${trigger} - ${(option.label || '').trim() || 'Opção'}`);
+        // Também aceita o cliente digitar o próprio nome do botão (ex.:
+        // "Voltar"), não só o número — é comum a mensagem pedir isso
+        // explicitamente ("digite Voltar"), e um botão nomeado "Voltar"
+        // deve funcionar mesmo assim, sem virar o gatilho global de reset.
+        const label = (option.label || '').trim();
+        if (label && !(label in opcoes)) opcoes[label] = edge.target;
+        optionLines.push(`${trigger} - ${label || 'Opção'}`);
       });
       if (optionLines.length > 0) {
         opcoesTexto = optionLines.join('\n');

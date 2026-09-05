@@ -209,12 +209,6 @@ class FlowEngine extends EventEmitter {
 
     if (isNewClient) return this._advance('start', jid);
 
-    if (RESET_KEYWORDS.has(normalized)) {
-      // Pedido explícito de voltar ao início: sempre mostra o começo de
-      // verdade (pergunta incluída), mesmo que o cliente já seja conhecido.
-      return this._advance('start', jid);
-    }
-
     // Cliente conhecido que ficou tempo demais sem mandar mensagem: prefere
     // recomeçar do início a continuar de onde parou (ver SESSION_TIMEOUT_MS).
     if (Date.now() - state.at > SESSION_TIMEOUT_MS) {
@@ -229,8 +223,13 @@ class FlowEngine extends EventEmitter {
       return this._advance('start', jid);
     }
 
-    // Nó de "Pergunta": a mensagem do cliente é a resposta, não uma opção de menu.
+    // Nó de "Pergunta": a mensagem do cliente é a resposta, não uma opção de
+    // menu — aqui não tem botão nem ligação pra "vencer", então digitar uma
+    // palavra de reset (menu/voltar/...) continua funcionando como saída de
+    // emergência pra quem quiser desistir da pergunta.
     if (currentNode.variable) {
+      if (RESET_KEYWORDS.has(normalized)) return this._advance('start', jid);
+
       const validator = INPUT_VALIDATORS[currentNode.kind] || (() => true);
 
       if (!validator(text)) {
@@ -249,6 +248,10 @@ class FlowEngine extends EventEmitter {
       return this._advance(nextKey, jid);
     }
 
+    // Balão com botões e/ou ligação natural: o que o PRÓPRIO fluxo desenhou
+    // sempre vence primeiro — inclusive um botão chamado "Voltar" (ou
+    // "Menu") apontando pra onde o usuário escolheu, mesmo que o texto do
+    // botão seja igual a uma das palavras de reset abaixo.
     const opcoes = currentNode.opcoes || {};
     const matchKey = Object.keys(opcoes).find((k) => k.trim().toLowerCase() === normalized);
 
@@ -259,6 +262,11 @@ class FlowEngine extends EventEmitter {
     // ligação simples de "qualquer outra resposta" ao mesmo tempo.
     const wildcardKey = Object.keys(opcoes).find((k) => k.trim() === '*');
     if (wildcardKey) return this._advance(opcoes[wildcardKey], jid);
+
+    // Só agora, com a mensagem não batendo com nada que o próprio fluxo
+    // desenhou, a palavra de reset serve de último recurso pra quem estiver
+    // perdido longe de qualquer botão assim configurado.
+    if (RESET_KEYWORDS.has(normalized)) return this._advance('start', jid);
 
     // Nenhuma opção reconhecida: repete a mensagem atual (o cliente permanece na mesma etapa,
     // mas ainda está "presente" — atualiza a hora, pra não ser tratado como sumido depois).
