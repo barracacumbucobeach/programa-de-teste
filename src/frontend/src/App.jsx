@@ -33,8 +33,45 @@ const edgeTypes = { labeled: LabeledEdge };
 let idCounter = 1;
 const generateId = () => `no_${Date.now().toString(36)}_${idCounter++}`;
 
+let stepIdCounter = 1;
+const generateStepId = () => `step_${Date.now().toString(36)}_${stepIdCounter++}`;
+
 let optionIdCounter = 1;
 const generateOptionId = () => `opt_${Date.now().toString(36)}_${optionIdCounter++}`;
+
+/**
+ * Cada nó do quadro é um "grupo" (estilo Typebot): uma pilha de balões
+ * dentro do mesmo cartão (`data.steps`), com uma ligação de entrada só
+ * (sempre pelo primeiro balão) e saídas só a partir do último balão da
+ * pilha (continuação natural) ou de um botão nomeado em qualquer balão.
+ *
+ * Fluxos salvos antes dessa mudança guardavam um balão só, direto em
+ * `data` (sem `data.steps`) — normalizeGroupNode() envolve esse formato
+ * antigo numa pilha de um balão só, reaproveitando o próprio id do nó
+ * como id do balão, pra bater com o mesmo esquema usado no backend
+ * (store.js) e não precisar reescrever nenhuma ligação já salva.
+ */
+function normalizeGroupNode(node) {
+  if (Array.isArray(node.data?.steps)) return node;
+  const { title, kind, mensagem, mediaUrl, variable, mensagemRetorno, options } = node.data || {};
+  return {
+    ...node,
+    data: {
+      title: title || '',
+      steps: [
+        {
+          id: node.id,
+          kind: kind || 'text',
+          mensagem: mensagem || '',
+          mediaUrl: mediaUrl || '',
+          variable,
+          mensagemRetorno,
+          options: Array.isArray(options) ? options : [],
+        },
+      ],
+    },
+  };
+}
 
 /** Notificação nativa do sistema operacional (funciona dentro do Electron
  *  sem nenhuma configuração extra) — usada para avisar de um pedido de
@@ -140,6 +177,7 @@ export default function App() {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [selectedStepId, setSelectedStepId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -177,7 +215,7 @@ export default function App() {
       try {
         const builder = await api.getBuilder();
         if (cancelled) return;
-        setNodes((builder.nodes || []).map((n) => ({ ...n, type: 'message', data: { ...n.data } })));
+        setNodes((builder.nodes || []).map((n) => normalizeGroupNode({ ...n, type: 'message' })));
         setEdges((builder.edges || []).map((e) => ({ ...e, type: 'labeled' })));
       } catch (err) {
         pushToast('error', `Falha ao carregar fluxo: ${err.message}`);
@@ -230,19 +268,18 @@ export default function App() {
   }, []);
 
   const onConnect = useCallback((params) => {
-    // Uma ligação "solta" (puxada do conector de baixo, sem passar por um
-    // botão nomeado) representa o próximo passo natural do balão — segue
-    // sempre, sem número, sem asterisco, sem nada pra configurar. Como só
-    // faz sentido UM próximo passo natural por balão, uma nova ligação
-    // assim SUBSTITUI a anterior (se houver) em vez de se somar a ela —
-    // senão as duas ficavam ativas disputando o mesmo caminho, e só uma
-    // vencia silenciosamente, parecendo um bug aleatório de rota errada.
+    // Uma ligação "solta" (puxada do conector de baixo do grupo — que só
+    // existe no ÚLTIMO balão da pilha) representa o próximo passo natural
+    // do grupo — segue sempre, sem número, sem asterisco, sem nada pra
+    // configurar. Como só faz sentido UM próximo passo natural por grupo,
+    // uma nova ligação assim SUBSTITUI a anterior (se houver) em vez de se
+    // somar a ela.
     //
-    // Só vira uma escolha numerada quando o usuário adiciona botões
-    // nomeados ao balão (cada um com seu próprio conector e seu próprio
-    // número) — esses continuam podendo se somar à vontade, indo e
-    // voltando quantas vezes for preciso, inclusive para um balão anterior
-    // no fluxo.
+    // Só vira uma escolha numerada quando o balão tem botões nomeados
+    // (cada um com seu próprio conector e seu próprio número, podendo estar
+    // em QUALQUER balão da pilha, não só o último) — esses continuam
+    // podendo se somar à vontade, indo e voltando quantas vezes for
+    // preciso, inclusive para um grupo anterior no fluxo.
     const isFreeConnection = !params.sourceHandle;
 
     setEdges((current) => {
@@ -254,26 +291,54 @@ export default function App() {
     setDirty(true);
   }, []);
 
-  const updateNodeData = useCallback((id, patch) => {
-    setNodes((current) => current.map((node) => (node.id === id ? { ...node, data: { ...node.data, ...patch } } : node)));
+  /** Seleciona um GRUPO inteiro (clique em qualquer parte do cartão que não
+   *  seja um balão específico) — o painel abre editando o primeiro balão. */
+  const selectGroup = useCallback((nodeId) => {
+    setSelectedNodeId(nodeId);
+    setSelectedStepId(null);
+  }, []);
+
+  /** Seleciona um balão específico dentro de um grupo (clique na linha
+   *  daquele balão, dentro do cartão empilhado). */
+  const selectStep = useCallback((nodeId, stepId) => {
+    setSelectedNodeId(nodeId);
+    setSelectedStepId(stepId);
+  }, []);
+
+  const updateGroupTitle = useCallback((nodeId, title) => {
+    setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, data: { ...node.data, title } } : node)));
     setDirty(true);
   }, []);
 
-  /** Cria um nó solto no quadro (arrastado ou clicado na paleta), sem conectar automaticamente —
-   *  a ligação entre nós é feita manualmente pelas bordas, como no Typebot. */
+  const updateStepData = useCallback((nodeId, stepId, patch) => {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.id !== nodeId) return node;
+        const steps = node.data.steps.map((step) => (step.id === stepId ? { ...step, ...patch } : step));
+        return { ...node, data: { ...node.data, steps } };
+      })
+    );
+    setDirty(true);
+  }, []);
+
+  /** Cria um grupo novo no quadro (arrastado ou clicado na paleta), com um
+   *  balão só — a ligação até outro grupo é sempre feita à mão pelo
+   *  usuário arrastando a partir das bordas, como no Typebot. */
   const createNodeAt = useCallback((kind, position) => {
-    const id = generateId();
+    const groupId = generateId();
     const meta = KIND_META[kind];
-    const data = { kind, title: meta?.label || 'Nova resposta', mensagem: '', mediaUrl: '' };
-    if (meta?.group === 'input') data.variable = meta.defaultVariable;
-    if (meta?.group === 'bubble') data.options = [];
-    const newNode = { id, type: 'message', position, data };
+    const stepId = generateStepId();
+    const step = { id: stepId, kind, mensagem: '', mediaUrl: '' };
+    if (meta?.group === 'input') step.variable = meta.defaultVariable;
+    if (meta?.group === 'bubble') step.options = [];
+    const newNode = { id: groupId, type: 'message', position, data: { title: '', steps: [step] } };
     setNodes((current) => [...current, newNode]);
-    setSelectedNodeId(id);
+    setSelectedNodeId(groupId);
+    setSelectedStepId(stepId);
     setDirty(true);
   }, []);
 
-  /** Clique na paleta (sem arrastar): cria o nó numa posição em cascata perto do centro do quadro. */
+  /** Clique na paleta (sem arrastar): cria o grupo numa posição em cascata perto do centro do quadro. */
   const addNodeFromPalette = useCallback(
     (kind) => {
       createNodeAt(kind, { x: 240 + Math.random() * 240, y: 260 + Math.random() * 240 });
@@ -281,40 +346,106 @@ export default function App() {
     [createNodeAt]
   );
 
-  /** "+ Adicionar botão" dentro de um balão: só cria o botão nomeado com seu
-   *  próprio conector — a ligação até outro nó é sempre feita à mão pelo
-   *  usuário arrastando a partir dele, como no Typebot. */
-  const addNodeOption = useCallback((nodeId) => {
+  /** "+ Adicionar balão" no rodapé do cartão: empilha mais um balão dentro
+   *  do MESMO grupo — é assim que se constrói uma sequência, sem precisar
+   *  criar um nó novo nem desenhar uma ligação pra cada mensagem. */
+  const addStep = useCallback((nodeId, kind = 'text') => {
+    const meta = KIND_META[kind];
+    const stepId = generateStepId();
+    const newStep = { id: stepId, kind, mensagem: '', mediaUrl: '' };
+    if (meta?.group === 'input') newStep.variable = meta.defaultVariable;
+    if (meta?.group === 'bubble') newStep.options = [];
     setNodes((current) =>
-      current.map((node) => {
-        if (node.id !== nodeId) return node;
-        const options = Array.isArray(node.data.options) ? node.data.options : [];
-        const newOption = { id: generateOptionId(), label: `Opção ${options.length + 1}` };
-        return { ...node, data: { ...node.data, options: [...options, newOption] } };
-      })
+      current.map((node) =>
+        node.id === nodeId ? { ...node, data: { ...node.data, steps: [...node.data.steps, newStep] } } : node
+      )
     );
+    setSelectedNodeId(nodeId);
+    setSelectedStepId(stepId);
     setDirty(true);
   }, []);
 
-  const updateNodeOption = useCallback((nodeId, optionId, label) => {
-    setNodes((current) =>
-      current.map((node) => {
-        if (node.id !== nodeId) return node;
-        const options = (node.data.options || []).map((option) =>
-          option.id === optionId ? { ...option, label } : option
+  /** Apaga um balão específico da pilha. Se for o único balão do grupo,
+   *  apaga o grupo inteiro (igual excluir um nó, como sempre funcionou) —
+   *  o balão de entrada do grupo "Início" nunca pode ser removido assim,
+   *  já que é ele que recebe a primeira mensagem de qualquer cliente. */
+  const deleteStep = useCallback(
+    (nodeId, stepId) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      const steps = node.data.steps;
+      const isOnlyStep = steps.length <= 1;
+      if (nodeId === 'start' && (isOnlyStep || steps[0].id === stepId)) return;
+
+      if (isOnlyStep) {
+        setNodes((current) => current.filter((n) => n.id !== nodeId));
+        setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+      } else {
+        const removedStep = steps.find((s) => s.id === stepId);
+        const removedOptionIds = new Set((removedStep?.options || []).map((o) => o.id));
+        setNodes((current) =>
+          current.map((n) =>
+            n.id === nodeId ? { ...n, data: { ...n.data, steps: n.data.steps.filter((s) => s.id !== stepId) } } : n
+          )
         );
-        return { ...node, data: { ...node.data, options } };
+        setEdges((current) => current.filter((edge) => !(edge.source === nodeId && removedOptionIds.has(edge.sourceHandle))));
+      }
+      setSelectedStepId(null);
+      setDirty(true);
+    },
+    [nodes]
+  );
+
+  /** Apaga o grupo inteiro (todos os balões da pilha de uma vez). */
+  const deleteGroup = useCallback((nodeId) => {
+    if (nodeId === 'start') return;
+    setNodes((current) => current.filter((node) => node.id !== nodeId));
+    setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+    setSelectedNodeId((current) => (current === nodeId ? null : current));
+    setSelectedStepId(null);
+    setDirty(true);
+  }, []);
+
+  /** "+ Adicionar botão" num balão: só cria o botão nomeado com seu próprio
+   *  conector — a ligação até outro grupo é sempre feita à mão pelo
+   *  usuário arrastando a partir dele, como no Typebot. */
+  const addStepOption = useCallback((nodeId, stepId) => {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.id !== nodeId) return node;
+        const steps = node.data.steps.map((step) => {
+          if (step.id !== stepId) return step;
+          const options = Array.isArray(step.options) ? step.options : [];
+          const newOption = { id: generateOptionId(), label: `Opção ${options.length + 1}` };
+          return { ...step, options: [...options, newOption] };
+        });
+        return { ...node, data: { ...node.data, steps } };
       })
     );
     setDirty(true);
   }, []);
 
-  const removeNodeOption = useCallback((nodeId, optionId) => {
+  const updateStepOption = useCallback((nodeId, stepId, optionId, label) => {
     setNodes((current) =>
       current.map((node) => {
         if (node.id !== nodeId) return node;
-        const options = (node.data.options || []).filter((option) => option.id !== optionId);
-        return { ...node, data: { ...node.data, options } };
+        const steps = node.data.steps.map((step) =>
+          step.id !== stepId ? step : { ...step, options: (step.options || []).map((o) => (o.id === optionId ? { ...o, label } : o)) }
+        );
+        return { ...node, data: { ...node.data, steps } };
+      })
+    );
+    setDirty(true);
+  }, []);
+
+  const removeStepOption = useCallback((nodeId, stepId, optionId) => {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.id !== nodeId) return node;
+        const steps = node.data.steps.map((step) =>
+          step.id !== stepId ? step : { ...step, options: (step.options || []).filter((o) => o.id !== optionId) }
+        );
+        return { ...node, data: { ...node.data, steps } };
       })
     );
     // Remove também a conexão que saía especificamente desse botão, se houver.
@@ -329,7 +460,9 @@ export default function App() {
 
   /** Liga (ou troca) o destino de um botão pelo seletor do painel lateral —
    *  alternativa ao arrastar o conector do botão direto no quadro; as duas
-   *  formas produzem exatamente a mesma conexão. */
+   *  formas produzem exatamente a mesma conexão. O id do botão já é único
+   *  em todo o fluxo, então não precisa saber a qual balão da pilha ele
+   *  pertence pra ligar certo. */
   const setOptionTarget = useCallback((nodeId, optionId, targetNodeId) => {
     setEdges((current) => {
       const withoutOld = current.filter((edge) => !(edge.source === nodeId && edge.sourceHandle === optionId));
@@ -348,14 +481,6 @@ export default function App() {
     setDirty(true);
   }, []);
 
-  const deleteNode = useCallback((id) => {
-    if (id === 'start') return;
-    setNodes((current) => current.filter((node) => node.id !== id));
-    setEdges((current) => current.filter((edge) => edge.source !== id && edge.target !== id));
-    setSelectedNodeId((current) => (current === id ? null : current));
-    setDirty(true);
-  }, []);
-
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
@@ -371,17 +496,24 @@ export default function App() {
   }, [nodes, edges, pushToast]);
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) || null;
+  const selectedSteps = selectedNode?.data?.steps || [];
+  const activeStepId = selectedStepId && selectedSteps.some((s) => s.id === selectedStepId) ? selectedStepId : selectedSteps[0]?.id;
+  const selectedStep = selectedSteps.find((s) => s.id === activeStepId) || null;
 
   const nodesWithHandlers = nodes.map((node) => ({
     ...node,
     data: {
       ...node.data,
       selected: node.id === selectedNodeId,
-      onDelete: () => deleteNode(node.id),
-      onMensagemChange: (value) => updateNodeData(node.id, { mensagem: value }),
-      onAddNodeOption: () => addNodeOption(node.id),
-      onUpdateNodeOption: (optionId, label) => updateNodeOption(node.id, optionId, label),
-      onRemoveNodeOption: (optionId) => removeNodeOption(node.id, optionId),
+      selectedStepId: node.id === selectedNodeId ? activeStepId : null,
+      onSelectStep: (stepId) => selectStep(node.id, stepId),
+      onDeleteGroup: () => deleteGroup(node.id),
+      onAddStep: (kind) => addStep(node.id, kind),
+      onDeleteStep: (stepId) => deleteStep(node.id, stepId),
+      onStepMensagemChange: (stepId, value) => updateStepData(node.id, stepId, { mensagem: value }),
+      onAddStepOption: (stepId) => addStepOption(node.id, stepId),
+      onUpdateStepOption: (stepId, optionId, label) => updateStepOption(node.id, stepId, optionId, label),
+      onRemoveStepOption: (stepId, optionId) => removeStepOption(node.id, stepId, optionId),
     },
   }));
 
@@ -431,7 +563,7 @@ export default function App() {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
-                onSelectNode={setSelectedNodeId}
+                onSelectNode={selectGroup}
                 onDeselect={() => setSelectedNodeId(null)}
                 onCreateNodeAt={createNodeAt}
               />
@@ -440,14 +572,18 @@ export default function App() {
         </div>
       </div>
 
-      {selectedNode && (
+      {selectedNode && selectedStep && (
         <NodePanel
           node={selectedNode}
+          step={selectedStep}
+          isLastStep={selectedSteps[selectedSteps.length - 1]?.id === selectedStep.id}
           edges={edges}
           nodes={nodes}
-          onChange={(patch) => updateNodeData(selectedNode.id, patch)}
+          onChangeGroupTitle={(title) => updateGroupTitle(selectedNode.id, title)}
+          onChangeStep={(patch) => updateStepData(selectedNode.id, selectedStep.id, patch)}
           onSetOptionTarget={(optionId, targetNodeId) => setOptionTarget(selectedNode.id, optionId, targetNodeId)}
-          onDelete={() => deleteNode(selectedNode.id)}
+          onDeleteStep={() => deleteStep(selectedNode.id, selectedStep.id)}
+          onDeleteGroup={() => deleteGroup(selectedNode.id)}
           onClose={() => setSelectedNodeId(null)}
         />
       )}

@@ -17,28 +17,32 @@ function autoResize(el) {
   el.style.height = `${el.scrollHeight}px`;
 }
 
-export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTarget, onDelete, onClose }) {
-  const isStart = node.id === 'start';
-  const kind = node.data.kind || 'text';
+/** Edita UM balão específico dentro de um grupo (pilha de balões, estilo
+ *  Typebot) — `node` é o grupo inteiro (dono do título e das ligações
+ *  externas), `step` é o balão selecionado dentro dele. */
+export default function NodePanel({ node, step, isLastStep, edges, nodes, onChangeGroupTitle, onChangeStep, onSetOptionTarget, onDeleteStep, onDeleteGroup, onClose }) {
+  const isStartEntry = node.id === 'start' && node.data.steps[0]?.id === step.id;
+  const kind = step.kind || 'text';
   const meta = KIND_META[kind] || KIND_META.text;
   const isInput = meta.group === 'input';
   const isHandoff = meta.group === 'handoff';
   const isMedia = MEDIA_KINDS.has(kind);
   const outgoing = edges.filter((edge) => edge.source === node.id);
-  const options = !isInput && !isHandoff && Array.isArray(node.data.options) ? node.data.options : [];
-  // Conexões que já saem de um botão nomeado do balão aparecem e se editam
-  // ali mesmo (no quadro) — aqui só ficam as "soltas" (sem botão), que usam
-  // gatilho de texto livre (incluindo o curinga "*").
+  const options = !isInput && !isHandoff && Array.isArray(step.options) ? step.options : [];
+  // Conexões que já saem de um botão nomeado deste balão aparecem e se
+  // editam ali mesmo (no quadro) — aqui só ficam as "soltas" (sem botão),
+  // que representam a saída natural do GRUPO inteiro (só existem de
+  // verdade quando este é o último balão da pilha).
   const freeOutgoing = outgoing.filter((edge) => !edge.sourceHandle);
 
   const nodeLabel = (targetId) => nodes.find((n) => n.id === targetId)?.data?.title || targetId;
 
-  const textareaRef = useCallback((el) => autoResize(el), [node.id]);
+  const textareaRef = useCallback((el) => autoResize(el), [step.id]);
 
   const handleKindChange = (newKind) => {
     const newMeta = KIND_META[newKind];
     const patch = { kind: newKind };
-    if (newMeta?.group === 'input' && !node.data.variable) {
+    if (newMeta?.group === 'input' && !step.variable) {
       patch.variable = newMeta.defaultVariable;
     }
     if (newMeta?.group !== 'bubble') {
@@ -47,14 +51,14 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
       // fosse trocado de volta para um balão mais tarde.
       patch.options = [];
     }
-    onChange(patch);
+    onChangeStep(patch);
   };
 
   return (
     <aside className="node-panel">
       <div className="node-panel-head">
         <h3>
-          {isStart
+          {isStartEntry
             ? 'Mensagem inicial'
             : `Editar ${meta.label.toLowerCase()}${isInput ? ' (pergunta)' : isHandoff ? ' (transferência)' : ''}`}
         </h3>
@@ -64,7 +68,21 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
       </div>
 
       <label className="field">
-        <span>Tipo do nó</span>
+        <span>Nome do grupo</span>
+        <input
+          type="text"
+          value={node.data.title || ''}
+          onChange={(event) => onChangeGroupTitle(event.target.value)}
+          placeholder={node.id === 'start' ? 'Início' : 'Ex: Produtos e serviços'}
+        />
+        <span className="field-hint field-hint-left">
+          É o nome deste cartão inteiro (a pilha de balões) — só pra você se organizar, não aparece
+          pro cliente.
+        </span>
+      </label>
+
+      <label className="field">
+        <span>Tipo deste balão</span>
         <select value={kind} onChange={(event) => handleKindChange(event.target.value)}>
           {KIND_GROUPS.map((group) => (
             <optgroup key={group.label} label={group.label}>
@@ -76,33 +94,21 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
             </optgroup>
           ))}
         </select>
-        {isStart && (
+        {isStartEntry && (
           <span className="field-hint field-hint-left">
-            Pode trocar até o nó inicial — ex.: virar uma Pergunta para já capturar o nome na
-            primeira mensagem, como no Typebot.
+            Pode trocar até o primeiro balão do Início — ex.: virar uma Pergunta para já capturar o
+            nome na primeira mensagem, como no Typebot.
           </span>
         )}
       </label>
-
-      {!isStart && (
-        <label className="field">
-          <span>Título do nó</span>
-          <input
-            type="text"
-            value={node.data.title || ''}
-            onChange={(event) => onChange({ title: event.target.value })}
-            placeholder="Ex: Enviar catálogo"
-          />
-        </label>
-      )}
 
       {isMedia && (
         <label className="field">
           <span>URL da {meta.label.toLowerCase()}</span>
           <input
             type="text"
-            value={node.data.mediaUrl || ''}
-            onChange={(event) => onChange({ mediaUrl: event.target.value })}
+            value={step.mediaUrl || ''}
+            onChange={(event) => onChangeStep({ mediaUrl: event.target.value })}
             placeholder="https://exemplo.com/arquivo.jpg"
           />
           <span className="field-hint field-hint-left">
@@ -118,30 +124,30 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
           <span>Salvar resposta na variável</span>
           <input
             type="text"
-            value={node.data.variable || ''}
-            onChange={(event) => onChange({ variable: event.target.value.replace(/[^a-zA-Z0-9_]/g, '') })}
+            value={step.variable || ''}
+            onChange={(event) => onChangeStep({ variable: event.target.value.replace(/[^a-zA-Z0-9_]/g, '') })}
             placeholder={meta.defaultVariable}
           />
           <span className="field-hint field-hint-left">
             O que o cliente responder aqui fica disponível em qualquer mensagem seguinte como{' '}
-            <code>{`{{${node.data.variable?.trim() || meta.defaultVariable}}}`}</code>.
+            <code>{`{{${step.variable?.trim() || meta.defaultVariable}}}`}</code>.
           </span>
         </label>
       )}
 
-      {isStart && isInput && (
+      {isStartEntry && isInput && (
         <label className="field">
           <span>Mensagem para quem já falou antes (opcional)</span>
           <textarea
             rows={3}
-            value={node.data.mensagemRetorno || ''}
-            onChange={(event) => onChange({ mensagemRetorno: event.target.value })}
-            placeholder={`Ex: Oi de novo, {{${node.data.variable?.trim() || meta.defaultVariable}}}! Que bom te ver por aqui outra vez.`}
+            value={step.mensagemRetorno || ''}
+            onChange={(event) => onChangeStep({ mensagemRetorno: event.target.value })}
+            placeholder={`Ex: Oi de novo, {{${step.variable?.trim() || meta.defaultVariable}}}! Que bom te ver por aqui outra vez.`}
           />
           <span className="field-hint field-hint-left">
             Se o cliente já respondeu essa pergunta antes e sumir por um tempo (6h) antes de
             mandar mensagem de novo, o bot pula a pergunta — já sabe a resposta — e manda esse
-            texto no lugar, seguido das opções do próximo passo. Deixe em branco para sempre
+            texto no lugar, seguido do resto da pilha a partir daqui. Deixe em branco para sempre
             perguntar de novo.
           </span>
         </label>
@@ -154,9 +160,9 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
         <textarea
           ref={textareaRef}
           rows={kind === 'text' || isInput || isHandoff ? 6 : 3}
-          value={node.data.mensagem || ''}
+          value={step.mensagem || ''}
           onChange={(event) => {
-            onChange({ mensagem: event.target.value });
+            onChangeStep({ mensagem: event.target.value });
             autoResize(event.target);
           }}
           placeholder={
@@ -170,7 +176,7 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
           }
         />
         <span className="field-hint field-hint-left">
-          {(node.data.mensagem || '').length} caracteres · use <code>{'{{variavel}}'}</code> para inserir uma resposta
+          {(step.mensagem || '').length} caracteres · use <code>{'{{variavel}}'}</code> para inserir uma resposta
           salva anteriormente
         </span>
       </label>
@@ -178,7 +184,7 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
       {!isInput && !isHandoff && (
         <p className="node-panel-note">
           💡 Use "+ Adicionar botão" no próprio balão para criar opções numeradas — cada uma vira uma
-          linha na mensagem e ganha seu próprio conector.
+          linha na mensagem e ganha seu próprio conector, podendo ligar pra qualquer grupo do fluxo.
         </p>
       )}
 
@@ -214,7 +220,7 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
             })}
           </ul>
           <span className="field-hint field-hint-left">
-            Também dá pra ligar arrastando o conector verde do botão até outro balão no quadro — os
+            Também dá pra ligar arrastando o conector verde do botão até outro grupo no quadro — os
             dois jeitos fazem a mesma coisa.
           </span>
         </div>
@@ -229,11 +235,22 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
             <code>menu</code> para voltar sozinho.
           </p>
         </div>
+      ) : !isLastStep ? (
+        <div className="field">
+          <span>Depois deste balão, segue para</span>
+          <p className="input-next-hint">
+            {options.length > 0
+              ? 'O cliente escolhe um dos botões acima — não há continuação automática por baixo deles.'
+              : '→ o próximo balão desta mesma pilha, automaticamente, sem o cliente precisar digitar nada.'}
+          </p>
+        </div>
       ) : isInput ? (
         <div className="field">
           <span>Depois de responder, segue para</span>
           <p className="input-next-hint">
-            {outgoing[0] ? `→ ${nodeLabel(outgoing[0].target)}` : 'Conecte este nó a outro pela borda inferior.'}
+            {outgoing.find((e) => !e.sourceHandle)
+              ? `→ ${nodeLabel(outgoing.find((e) => !e.sourceHandle).target)}`
+              : 'Conecte este grupo a outro pela borda inferior.'}
           </p>
         </div>
       ) : (
@@ -255,11 +272,18 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
         )
       )}
 
-      {!isStart && (
-        <button type="button" className="btn btn-danger btn-block" onClick={onDelete}>
-          🗑 Excluir este nó
-        </button>
-      )}
+      <div className="node-panel-actions">
+        {!isStartEntry && (
+          <button type="button" className="btn btn-danger btn-block" onClick={onDeleteStep}>
+            🗑 Excluir este balão
+          </button>
+        )}
+        {node.id !== 'start' && (
+          <button type="button" className="btn btn-outline-danger btn-block" onClick={onDeleteGroup}>
+            🗑 Excluir grupo inteiro
+          </button>
+        )}
+      </div>
     </aside>
   );
 }

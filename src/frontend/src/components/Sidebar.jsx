@@ -68,22 +68,31 @@ export default function Sidebar({
     (node) => node.id !== 'start' && !edges.some((edge) => edge.target === node.id)
   ).length;
 
-  // Nós de "Pergunta" só devem ter UMA conexão de saída (é o que decide para
-  // onde o fluxo segue depois da resposta) — zero conexões deixa o bot
-  // "mudo" depois da pergunta, e mais de uma é ambíguo (o motor sempre usa
-  // a primeira criada, o que parece um bug de "loop" para quem editou).
-  const questionNodes = nodes.filter((node) => node.data?.kind?.startsWith('input_'));
-  const unwiredQuestions = questionNodes.filter(
-    (node) => edges.filter((edge) => edge.source === node.id).length !== 1
+  // Cada grupo é uma pilha de balões — os diagnósticos abaixo olham
+  // balão por balão (não o grupo inteiro), já que cada um pode ser de um
+  // tipo diferente dentro do mesmo cartão.
+  const allSteps = nodes.flatMap((node) => {
+    const steps = node.data?.steps || [];
+    return steps.map((step, index) => ({ step, groupId: node.id, isLastStep: index === steps.length - 1 }));
+  });
+
+  // Uma Pergunta que NÃO é o último balão da pilha segue sozinha pro
+  // próximo balão do mesmo grupo (não precisa de ligação nenhuma). Só a
+  // que É o último balão depende de uma ligação desenhada até outro grupo
+  // — zero ligações aí deixa o bot "mudo" depois da pergunta.
+  const questionSteps = allSteps.filter(({ step }) => step.kind?.startsWith('input_'));
+  const unwiredQuestions = questionSteps.filter(
+    ({ step, groupId, isLastStep }) =>
+      isLastStep && edges.filter((edge) => edge.source === groupId && !edge.sourceHandle).length !== 1
   ).length;
 
-  // Nó sem mensagem (nem mídia, quando é o caso) = o bot fica em silêncio
+  // Balão sem mensagem (nem mídia, quando é o caso) = o bot fica em silêncio
   // nesse ponto do fluxo — muito fácil de passar despercebido, já que o
   // WhatsApp simplesmente não recebe nada e parece que "travou".
-  const emptyContentNodes = nodes.filter((node) => {
-    const kind = node.data?.kind || 'text';
-    const hasMessage = Boolean(node.data?.mensagem?.trim());
-    const hasMedia = Boolean(node.data?.mediaUrl?.trim());
+  const emptyContentNodes = allSteps.filter(({ step }) => {
+    const kind = step.kind || 'text';
+    const hasMessage = Boolean(step.mensagem?.trim());
+    const hasMedia = Boolean(step.mediaUrl?.trim());
     if (kind === 'handoff') return false; // mensagem é opcional nesse tipo
     if (kind === 'image' || kind === 'video' || kind === 'audio') return !hasMessage && !hasMedia;
     return !hasMessage;
@@ -143,7 +152,7 @@ export default function Sidebar({
             <span className="check-icon">{orphanCount === 0 ? '✓' : '!'}</span>
             {orphanCount === 0 ? 'Sem nós órfãos' : `${orphanCount} nó(s) sem conexão`}
           </li>
-          {questionNodes.length > 0 && (
+          {questionSteps.length > 0 && (
             <li className={unwiredQuestions === 0 ? 'ok' : 'warn'}>
               <span className="check-icon">{unwiredQuestions === 0 ? '✓' : '!'}</span>
               {unwiredQuestions === 0

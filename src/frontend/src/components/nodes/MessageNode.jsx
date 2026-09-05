@@ -22,18 +22,20 @@ export const KIND_META = {
 
 const MEDIA_KINDS = new Set(['image', 'video', 'audio']);
 
-export default function MessageNode({ id, data }) {
-  const isStart = id === 'start';
-  const kind = data.kind || 'text';
+/** Um balão dentro da pilha do grupo — igual ao balão único de antes, só que
+ *  agora é uma entre várias linhas empilhadas no mesmo cartão. */
+function StepRow({ step, isFirstOfStart, isLastStep, isSelected, onSelect, data }) {
+  const kind = step.kind || 'text';
   const meta = KIND_META[kind] || KIND_META.text;
   const isInput = meta.group === 'input';
   const isHandoff = meta.group === 'handoff';
   // Balões (texto/imagem/vídeo/áudio) podem ter botões nomeados, cada um com
-  // seu próprio conector — como no Typebot. Perguntas e o nó de atendente
-  // continuam com um único caminho de saída (fazem sentido sem múltiplas opções).
+  // seu próprio conector — como no Typebot, isso vale pra QUALQUER balão da
+  // pilha, não só o último. Perguntas e o nó de atendente continuam com um
+  // único caminho de saída (fazem sentido sem múltiplas opções).
   const supportsOptions = !isInput && !isHandoff;
-  const options = supportsOptions && Array.isArray(data.options) ? data.options : [];
-  const hasMedia = Boolean(data.mediaUrl?.trim());
+  const options = supportsOptions && Array.isArray(step.options) ? step.options : [];
+  const hasMedia = Boolean(step.mediaUrl?.trim());
 
   // O quadro (React Flow) re-renderiza o nó a cada letra digitada — como o
   // balão fica dentro de um canvas com zoom/posição próprios, o navegador
@@ -49,33 +51,35 @@ export default function MessageNode({ id, data }) {
     if (el && caretRef.current && document.activeElement === el) {
       el.setSelectionRange(caretRef.current.start, caretRef.current.end);
     }
-  }, [data.mensagem]);
+  }, [step.mensagem]);
 
   const handleMensagemChange = (event) => {
     const el = event.target;
     caretRef.current = { start: el.selectionStart, end: el.selectionEnd };
-    data.onMensagemChange?.(el.value);
+    data.onStepMensagemChange?.(step.id, el.value);
     autoResize(el);
   };
 
   return (
-    <div className={`flow-node kind-${kind} ${data.selected ? 'is-selected' : ''} ${isStart ? 'is-start' : ''}`}>
-      {!isStart && <Handle type="target" position={Position.Top} className="flow-handle" />}
-
-      <div className="flow-node-head">
-        <span className={`flow-node-badge ${isStart ? 'badge-start' : `badge-${kind}`}`}>
-          {isStart
-            ? '🚀 Início'
-            : `${meta.icon} ${data.title || (isInput ? `Pergunta: ${meta.label}` : meta.label)}`}
+    <div
+      className={`flow-step kind-${kind} ${isSelected ? 'is-selected' : ''}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect();
+      }}
+    >
+      <div className="flow-step-head">
+        <span className={`flow-node-badge ${isFirstOfStart ? 'badge-start' : `badge-${kind}`}`}>
+          {isFirstOfStart ? '🚀 Início' : `${meta.icon} ${isInput ? `Pergunta: ${meta.label}` : meta.label}`}
         </span>
-        {!isStart && (
+        {!isFirstOfStart && (
           <button
             type="button"
             className="flow-node-delete"
-            title="Excluir nó"
+            title="Excluir este balão"
             onClick={(event) => {
               event.stopPropagation();
-              data.onDelete?.();
+              data.onDeleteStep?.(step.id);
             }}
           >
             ✕
@@ -87,7 +91,7 @@ export default function MessageNode({ id, data }) {
         <div className={`flow-node-media ${hasMedia ? '' : 'is-empty'}`}>
           {hasMedia ? (
             kind === 'image' ? (
-              <img src={data.mediaUrl} alt="" className="flow-node-media-preview" />
+              <img src={step.mediaUrl} alt="" className="flow-node-media-preview" />
             ) : (
               <span className="flow-node-media-icon">{meta.icon}</span>
             )
@@ -104,7 +108,7 @@ export default function MessageNode({ id, data }) {
         }}
         className="flow-node-inline-textarea nodrag nowheel"
         rows={2}
-        value={data.mensagem || ''}
+        value={step.mensagem || ''}
         onChange={handleMensagemChange}
         placeholder={
           isHandoff
@@ -115,7 +119,7 @@ export default function MessageNode({ id, data }) {
         }
       />
 
-      {isInput && <div className="flow-node-variable">💾 salva em: {data.variable?.trim() || meta.defaultVariable}</div>}
+      {isInput && <div className="flow-node-variable">💾 salva em: {step.variable?.trim() || meta.defaultVariable}</div>}
       {isHandoff && <div className="flow-node-handoff-hint">🙋 Pausa o bot e avisa a loja</div>}
 
       {supportsOptions && options.length > 0 && (
@@ -126,8 +130,7 @@ export default function MessageNode({ id, data }) {
               <input
                 className="flow-node-option-input nodrag"
                 value={option.label}
-                onChange={(event) => data.onUpdateNodeOption?.(option.id, event.target.value)}
-                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => data.onUpdateStepOption?.(step.id, option.id, event.target.value)}
                 placeholder="Nome do botão"
               />
               <button
@@ -136,7 +139,7 @@ export default function MessageNode({ id, data }) {
                 title="Remover botão"
                 onClick={(event) => {
                   event.stopPropagation();
-                  data.onRemoveNodeOption?.(option.id);
+                  data.onRemoveStepOption?.(step.id, option.id);
                 }}
               >
                 ✕
@@ -153,19 +156,96 @@ export default function MessageNode({ id, data }) {
           className="flow-node-add"
           onClick={(event) => {
             event.stopPropagation();
-            data.onAddNodeOption?.();
+            data.onAddStepOption?.(step.id);
           }}
         >
           + Adicionar botão
         </button>
       )}
+    </div>
+  );
+}
 
-      {/* O conector genérico embaixo só existe quando o balão NÃO tem botões
-          nomeados — com botões, cada um já tem seu próprio conector à direita,
-          e manter os dois ao mesmo tempo deixava fácil ligar sem querer pelo
-          de baixo, criando uma ligação "solta" que podia disputar (e até
-          vencer) o gatilho de um botão numerado na hora de compilar o fluxo. */}
-      {options.length === 0 && <Handle type="source" position={Position.Bottom} className="flow-handle" />}
+/**
+ * Um "grupo" (estilo Typebot): vários balões empilhados dentro do mesmo
+ * cartão. A entrada é sempre pelo primeiro balão da pilha; a saída natural
+ * (sem botão) só existe no ÚLTIMO balão — os de cima seguem sozinhos pro
+ * próximo da mesma pilha assim que o motor processa a resposta. Um botão
+ * nomeado em QUALQUER balão da pilha também pode ligar pra outro grupo.
+ */
+export default function MessageNode({ id, data }) {
+  const isStart = id === 'start';
+  const steps = Array.isArray(data.steps) ? data.steps : [];
+  const lastStep = steps[steps.length - 1];
+  // Só o último balão da pilha tem opções — se tiver, ele já ganha seus
+  // próprios conectores por botão, e o conector genérico de baixo não faz
+  // mais sentido (evita ligação solta disputando gatilho com um botão).
+  const lastStepHasOptions = Boolean(lastStep) && Array.isArray(lastStep.options) && lastStep.options.length > 0;
+
+  return (
+    <div className={`flow-node flow-group ${data.selected ? 'is-selected' : ''} ${isStart ? 'is-start' : ''}`}>
+      {!isStart && <Handle type="target" position={Position.Top} className="flow-handle" />}
+
+      <div
+        className="flow-group-head"
+        onClick={(event) => {
+          event.stopPropagation();
+          data.onSelectStep?.(steps[0]?.id);
+        }}
+      >
+        <input
+          className="flow-group-title-input nodrag"
+          value={data.title || ''}
+          onChange={(event) => data.onChangeGroupTitle?.(event.target.value)}
+          onClick={(event) => event.stopPropagation()}
+          placeholder={isStart ? 'Início' : 'Nome do grupo (opcional)'}
+        />
+        {!isStart && (
+          <button
+            type="button"
+            className="flow-node-delete"
+            title="Excluir grupo inteiro"
+            onClick={(event) => {
+              event.stopPropagation();
+              data.onDeleteGroup?.();
+            }}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      <div className="flow-group-steps">
+        {steps.map((step, index) => (
+          <StepRow
+            key={step.id}
+            step={step}
+            isFirstOfStart={isStart && index === 0}
+            isLastStep={index === steps.length - 1}
+            isSelected={data.selectedStepId === step.id}
+            onSelect={() => data.onSelectStep?.(step.id)}
+            data={data}
+          />
+        ))}
+      </div>
+
+      <button
+        type="button"
+        className="flow-node-add flow-group-add-step"
+        onClick={(event) => {
+          event.stopPropagation();
+          data.onAddStep?.('text');
+        }}
+      >
+        + Adicionar balão
+      </button>
+
+      {/* O conector genérico embaixo do grupo só existe quando o ÚLTIMO
+          balão da pilha não tem botões nomeados — com botões, cada um já
+          tem seu próprio conector, e manter os dois ao mesmo tempo deixava
+          fácil ligar sem querer pelo de baixo, criando uma ligação "solta"
+          que podia disputar (e até vencer) o gatilho de um botão. */}
+      {!lastStepHasOptions && <Handle type="source" position={Position.Bottom} className="flow-handle" />}
     </div>
   );
 }

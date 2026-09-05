@@ -609,9 +609,17 @@ button {
   border-color: rgba(37, 211, 102, 0.4);
   /* O card de início é sempre escuro, nos dois temas — recoloreia o texto
      descendente (via cascata de custom properties) para continuar legível
-     mesmo quando o tema claro deixa --text-secondary/--text-muted escuros. */
+     mesmo quando o tema claro deixa --text-secondary/--text-muted escuros.
+     --text-primary fica de fora de propósito: outros elementos aqui dentro
+     (como os campos dos botões) têm fundo que SEGUE o tema — se
+     --text-primary também virasse sempre claro, esses campos ficariam com
+     texto claro sobre fundo claro no tema light. */
   --text-secondary: #b9c3d9;
   --text-muted: #7c8bab;
+}
+
+.flow-node.is-start .flow-group-title-input {
+  color: #e8edf9;
 }
 
 .flow-node.is-start .badge-start {
@@ -654,13 +662,78 @@ button {
 }
 .badge-handoff { background: rgba(251, 146, 60, 0.16); color: var(--kind-handoff); }
 
-.flow-node.kind-image { border-color: rgba(192, 132, 252, 0.35); }
-.flow-node.kind-video { border-color: rgba(244, 114, 182, 0.35); }
-.flow-node.kind-audio { border-color: rgba(251, 191, 36, 0.35); }
-.flow-node[class*="kind-input_"] { border-color: rgba(45, 212, 191, 0.35); }
-.flow-node.kind-handoff {
-  border-color: rgba(251, 146, 60, 0.5);
-  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.18), var(--shadow-md);
+/* ---------- grupo (pilha de balões, estilo Typebot) ---------- */
+
+.flow-group {
+  width: 260px;
+  padding: 10px;
+}
+
+.flow-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border-soft);
+}
+
+.flow-group-title-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 2px 0;
+}
+
+.flow-group-title-input:focus {
+  outline: none;
+}
+
+.flow-group-title-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.flow-group-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flow-step {
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.flow-step:hover {
+  background: var(--bg-elevated);
+}
+
+.flow-step.is-selected {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+}
+
+.flow-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.flow-group-add-step {
+  margin-top: 4px;
+}
+
+.flow-step.kind-handoff {
+  background: rgba(251, 146, 60, 0.08);
+  border-color: rgba(251, 146, 60, 0.35);
 }
 
 .flow-node-variable {
@@ -925,6 +998,12 @@ button {
 }
 
 /* ---------- node editing panel ---------- */
+
+.node-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
 .node-panel {
   flex: 0 0 320px;
