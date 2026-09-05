@@ -3,6 +3,12 @@ import { KIND_META } from './nodes/MessageNode.jsx';
 
 const MEDIA_KINDS = new Set(['image', 'video', 'audio']);
 
+const KIND_GROUPS = [
+  { label: 'Balões', kinds: ['text', 'image', 'video', 'audio'] },
+  { label: 'Perguntas', kinds: ['input_text', 'input_number', 'input_email', 'input_phone'] },
+  { label: 'Atendimento humano', kinds: ['handoff'] },
+];
+
 /** Cresce junto com o conteúdo, sem nenhum teto — sem sensação de limite de tamanho
  *  (o painel inteiro rola se precisar). */
 function autoResize(el) {
@@ -29,6 +35,21 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
 
   const textareaRef = useCallback((el) => autoResize(el), [node.id]);
 
+  const handleKindChange = (newKind) => {
+    const newMeta = KIND_META[newKind];
+    const patch = { kind: newKind };
+    if (newMeta?.group === 'input' && !node.data.variable) {
+      patch.variable = newMeta.defaultVariable;
+    }
+    if (newMeta?.group !== 'bubble') {
+      // Perguntas e o nó de atendente não usam botões — descarta os que
+      // porventura existiam, senão eles reapareceriam do nada se o tipo
+      // fosse trocado de volta para um balão mais tarde.
+      patch.options = [];
+    }
+    onChange(patch);
+  };
+
   return (
     <aside className="node-panel">
       <div className="node-panel-head">
@@ -41,6 +62,27 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
           ✕
         </button>
       </div>
+
+      <label className="field">
+        <span>Tipo do nó</span>
+        <select value={kind} onChange={(event) => handleKindChange(event.target.value)}>
+          {KIND_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.kinds.map((k) => (
+                <option key={k} value={k}>
+                  {KIND_META[k].icon} {KIND_META[k].label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        {isStart && (
+          <span className="field-hint field-hint-left">
+            Pode trocar até o nó inicial — ex.: virar uma Pergunta para já capturar o nome na
+            primeira mensagem, como no Typebot.
+          </span>
+        )}
+      </label>
 
       {!isStart && (
         <label className="field">

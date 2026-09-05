@@ -99,7 +99,12 @@ function compileGraph(graph) {
 
   for (const node of graph.nodes) {
     const outgoing = graph.edges.filter((edge) => edge.source === node.id);
-    const options = Array.isArray(node.data?.options) ? node.data.options : [];
+    const kind = VALID_KINDS.has(node.data?.kind) ? node.data.kind : 'text';
+    // Botões só existem de fato para balões (texto/imagem/vídeo/áudio) — se um
+    // nó já teve botões e depois foi convertido para Pergunta/Atendente pelo
+    // seletor de tipo, esses botões "sobrando" nos dados não devem mais virar
+    // lista numerada nem disputar gatilho com o mecanismo de variável/pausa.
+    const options = MESSAGE_KINDS.has(kind) && Array.isArray(node.data?.options) ? node.data.options : [];
     const opcoes = {};
     let mensagem = (node.data?.mensagem || '').trim();
 
@@ -129,8 +134,6 @@ function compileGraph(graph) {
         const gatilho = String(edge.data?.trigger ?? edge.label ?? '1').trim();
         if (gatilho) opcoes[gatilho] = edge.target;
       });
-
-    const kind = VALID_KINDS.has(node.data?.kind) ? node.data.kind : 'text';
 
     compiled[node.id] = {
       kind,

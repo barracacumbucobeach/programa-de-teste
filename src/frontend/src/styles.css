@@ -919,7 +919,8 @@ button {
 }
 
 .field input[type='text'],
-.field textarea {
+.field textarea,
+.field select {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -937,7 +938,8 @@ button {
 }
 
 .field input[type='text']:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus {
   outline: none;
   border-color: var(--accent);
 }
