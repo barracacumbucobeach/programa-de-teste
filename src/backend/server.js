@@ -83,6 +83,12 @@ function createServer({ whatsapp, flowEngine, conversationLog, customerStore }) 
     res.json(conversationLog.getMessages(jid));
   });
 
+  app.delete('/api/conversations/:jid', (req, res) => {
+    const jid = decodeURIComponent(req.params.jid);
+    conversationLog.deleteContact(jid);
+    res.json({ ok: true });
+  });
+
   app.get('/api/customers', (req, res) => {
     res.json(customerStore.listCustomers());
   });

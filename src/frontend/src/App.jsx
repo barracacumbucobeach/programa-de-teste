@@ -589,7 +589,12 @@ export default function App() {
       )}
 
       <QRModal open={qrOpen} onClose={() => setQrOpen(false)} status={status} />
-      <ConversationsModal open={conversationsOpen} onClose={() => setConversationsOpen(false)} liveMessage={liveMessage} />
+      <ConversationsModal
+        open={conversationsOpen}
+        onClose={() => setConversationsOpen(false)}
+        liveMessage={liveMessage}
+        pushToast={pushToast}
+      />
       <CustomersModal open={customersOpen} onClose={() => setCustomersOpen(false)} pushToast={pushToast} />
       <HandoffsModal
         open={handoffsOpen}

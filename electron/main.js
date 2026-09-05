@@ -15,30 +15,15 @@ const isDev = !fs.existsSync(DIST_INDEX);
 let mainWindow;
 
 /**
- * O app já se chamou "AutoFlow Desktop" antes de virar "Fluxia" — como a
- * pasta de dados do usuário (fluxos salvos, conexão do WhatsApp, clientes,
- * conversas...) mora dentro de uma pasta com o nome do app, uma troca de
- * nome sozinha faria o Windows/Linux/Mac criar uma pasta nova vazia e
- * "esconder" tudo que já existia, inclusive a sessão do WhatsApp já pareada
- * (obrigando a escanear o QR code de novo). Antes de semear os dados
- * padrão, se a pasta nova ainda não existe mas a pasta do nome antigo
- * existe, migra tudo de uma vez — só roda na primeira execução com o nome
- * novo, nunca sobrescreve nada que já esteja na pasta nova.
- */
-function migrateFromOldAppName(userDataDir) {
-  if (fs.existsSync(userDataDir)) return; // já rodou com o nome novo antes
-
-  const oldUserDataDir = path.join(path.dirname(app.getPath('userData')), 'AutoFlow Desktop', 'data');
-  if (!fs.existsSync(oldUserDataDir)) return; // instalação nova, nunca teve o nome antigo
-
-  fs.mkdirSync(path.dirname(userDataDir), { recursive: true });
-  fs.cpSync(oldUserDataDir, userDataDir, { recursive: true });
-}
-
-/**
  * Copia o fluxo de exemplo (data/fluxo_builder.json e fluxo_bot.json,
  * empacotados dentro do app) para a pasta gravável do usuário na primeira
  * execução, sem nunca sobrescrever um fluxo que o usuário já tenha salvo.
+ *
+ * Instalar do zero (ou desinstalar e instalar de novo — o desinstalador
+ * apaga a pasta de dados, ver "deleteAppDataOnUninstall" no package.json)
+ * deve sempre abrir como se fosse a primeira vez: nenhum cliente, conversa
+ * ou fluxo de uma instalação anterior sobrevive, só esse exemplo pronto
+ * pra editar.
  */
 function seedUserData(userDataDir) {
   fs.mkdirSync(userDataDir, { recursive: true });
@@ -56,7 +41,6 @@ function seedUserData(userDataDir) {
 /** Inicia o motor local (API + conexão WhatsApp) dentro do processo do Electron. */
 function startEngine() {
   const userDataDir = path.join(app.getPath('userData'), 'data');
-  migrateFromOldAppName(userDataDir);
   seedUserData(userDataDir);
   process.env.AUTOFLOW_DATA_DIR = userDataDir;
 

@@ -1409,9 +1409,40 @@ button {
   text-overflow: ellipsis;
 }
 
+.conversation-row-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2px;
+}
+
 .conversation-count {
   font-size: 10px;
   color: var(--text-muted);
+}
+
+.conversation-delete {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.conversation-delete:hover {
+  opacity: 1;
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.conversation-delete:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .conversations-thread {

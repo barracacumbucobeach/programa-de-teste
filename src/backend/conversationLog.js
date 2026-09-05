@@ -60,6 +60,27 @@ class ConversationLog {
     return [...this.contactsIndex.values()].sort((a, b) => b.lastAt - a.lastAt);
   }
 
+  /** Apaga o histórico de conversa com um contato (reescreve o arquivo sem
+   *  as linhas dele — é um arquivo "append only", não dá pra apagar uma
+   *  linha específica sem reescrever o resto). */
+  deleteContact(jid) {
+    this.contactsIndex.delete(jid);
+    if (!fs.existsSync(this.filePath)) return;
+
+    const raw = fs.readFileSync(this.filePath, 'utf-8');
+    const kept = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (entry.jid !== jid) kept.push(line);
+      } catch {
+        // linha corrompida: não dá pra saber de quem era, descarta também
+      }
+    }
+    fs.writeFileSync(this.filePath, kept.length ? kept.join('\n') + '\n' : '', 'utf-8');
+  }
+
   /** Retorna as últimas `limit` mensagens trocadas com um contato específico. */
   getMessages(jid, { limit = 300 } = {}) {
     if (!fs.existsSync(this.filePath)) return [];

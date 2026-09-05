@@ -22,11 +22,12 @@ const KIND_LABEL = { text: '', image: '🖼️ Imagem', video: '🎬 Vídeo', au
  * o histórico de mensagens trocadas com o contato selecionado. Atualiza ao
  * vivo conforme novas mensagens chegam via WebSocket (prop `liveMessage`).
  */
-export default function ConversationsModal({ open, onClose, liveMessage }) {
+export default function ConversationsModal({ open, onClose, liveMessage, pushToast }) {
   const [contacts, setContacts] = useState([]);
   const [selectedJid, setSelectedJid] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [deletingJid, setDeletingJid] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -72,6 +73,25 @@ export default function ConversationsModal({ open, onClose, liveMessage }) {
 
   if (!open) return null;
 
+  const handleDelete = async (jid) => {
+    if (!window.confirm('Apagar todo o histórico de conversa com este contato? Não tem como desfazer.')) return;
+
+    setDeletingJid(jid);
+    try {
+      await api.deleteConversation(jid);
+      setContacts((prev) => prev.filter((c) => c.jid !== jid));
+      if (selectedJid === jid) {
+        setSelectedJid(null);
+        setMessages([]);
+      }
+      pushToast?.('success', 'Conversa apagada.');
+    } catch (err) {
+      pushToast?.('error', err.message);
+    } finally {
+      setDeletingJid(null);
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card modal-card-wide" onClick={(event) => event.stopPropagation()}>
@@ -86,11 +106,13 @@ export default function ConversationsModal({ open, onClose, liveMessage }) {
           <div className="conversations-list">
             {contacts.length === 0 && <p className="conversations-empty">Nenhuma conversa registrada ainda.</p>}
             {contacts.map((contact) => (
-              <button
-                type="button"
+              <div
                 key={contact.jid}
+                role="button"
+                tabIndex={0}
                 className={`conversation-row ${contact.jid === selectedJid ? 'is-active' : ''}`}
                 onClick={() => setSelectedJid(contact.jid)}
+                onKeyDown={(event) => event.key === 'Enter' && setSelectedJid(contact.jid)}
               >
                 <div className="conversation-row-top">
                   <span className="conversation-phone">{formatPhone(contact.phone)}</span>
@@ -100,8 +122,22 @@ export default function ConversationsModal({ open, onClose, liveMessage }) {
                   {contact.lastDirection === 'out' ? 'Você: ' : ''}
                   {KIND_LABEL[contact.lastKind] || contact.lastText || '(sem texto)'}
                 </p>
-                <span className="conversation-count">{contact.count} mensagens</span>
-              </button>
+                <div className="conversation-row-bottom">
+                  <span className="conversation-count">{contact.count} mensagens</span>
+                  <button
+                    type="button"
+                    className="conversation-delete"
+                    title="Apagar conversa"
+                    disabled={deletingJid === contact.jid}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDelete(contact.jid);
+                    }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
 

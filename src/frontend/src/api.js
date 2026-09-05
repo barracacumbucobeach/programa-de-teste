@@ -22,6 +22,7 @@ export const api = {
   logoutSession: () => request('/api/session/logout', { method: 'POST' }),
   getConversations: () => request('/api/conversations'),
   getConversationMessages: (jid) => request(`/api/conversations/${encodeURIComponent(jid)}`),
+  deleteConversation: (jid) => request(`/api/conversations/${encodeURIComponent(jid)}`, { method: 'DELETE' }),
   getCustomers: () => request('/api/customers'),
   deleteCustomer: (jid) => request(`/api/customers/${encodeURIComponent(jid)}`, { method: 'DELETE' }),
   getHandoffs: () => request('/api/handoffs'),
