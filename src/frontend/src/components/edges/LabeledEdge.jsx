@@ -7,7 +7,10 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@xyflow/react';
 // "+ Adicionar botão") são a única forma de dar uma escolha de verdade ao
 // cliente, e o número deles já aparece dentro do próprio balão — não
 // precisa (e não deve) duplicar esse número aqui na ligação.
-export default function LabeledEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd, data }) {
+export default function LabeledEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, data }) {
+  // Curvatura mais acentuada que o padrão do React Flow — dá aquele traçado
+  // fluido, "em chave", saindo reto do balão e curvando suave até o
+  // próximo, em vez de uma curva mais achatada/diagonal.
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -15,11 +18,18 @@ export default function LabeledEdge({ id, sourceX, sourceY, targetX, targetY, so
     targetX,
     targetY,
     targetPosition,
+    curvature: 0.4,
   });
 
   return (
     <>
-      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={{ ...style, stroke: '#3b4a6b', strokeWidth: 2 }} />
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd="url(#autoflow-edge-arrow)"
+        className="autoflow-edge-path"
+        style={{ ...style, strokeWidth: 2.5 }}
+      />
       <EdgeLabelRenderer>
         <div
           className="edge-label edge-label-plain"

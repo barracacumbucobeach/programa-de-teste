@@ -857,6 +857,18 @@ button {
   border: 3px solid var(--bg-canvas) !important;
   box-shadow: 0 0 0 1px var(--accent);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
+  position: relative; /* ancora a área de clique maior do ::before abaixo */
+}
+
+/* O pontinho visível é pequeno de propósito (não pode tampar o balão), mas
+   clicar/arrastar exatamente nele era difícil — essa camada invisível
+   estende bastante a área que "pega" a ligação, sem mudar o tamanho do
+   conector na tela. */
+.flow-handle::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
 }
 
 .flow-handle:hover {
@@ -870,6 +882,17 @@ button {
 }
 
 /* ---------- edge label ---------- */
+
+/* Traçado da ligação: verde da marca, com curva fluida (ver curvature no
+   LabeledEdge.jsx) e uma seta na cor do tema no final de cada uma. */
+.autoflow-edge-path {
+  stroke: var(--accent) !important;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+}
+
+.autoflow-edge-arrow-fill {
+  fill: var(--accent);
+}
 
 .edge-label {
   position: absolute;

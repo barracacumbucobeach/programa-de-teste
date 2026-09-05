@@ -82,6 +82,25 @@ function FlowCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect, onS
 
   return (
     <div className="canvas-drop-area" ref={wrapperRef} onDrop={handleDrop} onDragOver={handleDragOver}>
+      {/* Seta usada no fim de toda ligação (LabeledEdge referencia por id) —
+          definida uma vez aqui fora, com cor via CSS (classe, não atributo),
+          pra acompanhar o tema em vez de ficar travada numa cor fixa. */}
+      <svg width="0" height="0" style={{ position: 'absolute' }}>
+        <defs>
+          <marker
+            id="autoflow-edge-arrow"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="18"
+            markerHeight="18"
+            markerUnits="userSpaceOnUse"
+            orient="auto"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" className="autoflow-edge-arrow-fill" />
+          </marker>
+        </defs>
+      </svg>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -96,6 +115,12 @@ function FlowCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect, onS
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{ type: 'labeled' }}
         connectionLineStyle={{ stroke: '#25d366', strokeWidth: 3 }}
+        connectionLineType="smoothstep"
+        // Raio de "ímã" ao redor de cada conector — sem isso, era preciso soltar o
+        // mouse quase em cima do pontinho verde pra a ligação realmente pegar, o
+        // que foi relatado como difícil de acertar. Com um raio maior, soltar perto
+        // do conector já é suficiente.
+        connectionRadius={35}
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#243250" />
         <Controls showInteractive={false} />
