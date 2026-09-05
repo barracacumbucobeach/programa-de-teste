@@ -141,7 +141,7 @@ function compileGraph(graph) {
     outgoing
       .filter((edge) => !edge.sourceHandle || !options.some((option) => option.id === edge.sourceHandle))
       .forEach((edge) => {
-        const gatilho = String(edge.data?.trigger ?? edge.label ?? '1').trim();
+        const gatilho = String(edge.data?.trigger ?? edge.label ?? '*').trim();
         if (gatilho && !(gatilho in opcoes)) opcoes[gatilho] = edge.target;
       });
 

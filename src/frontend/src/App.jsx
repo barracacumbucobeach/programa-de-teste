@@ -196,26 +196,30 @@ export default function App() {
     if (isRealEdit) setDirty(true);
   }, []);
 
-  const onConnect = useCallback(
-    (params) => {
-      // Nós de "Pergunta" só seguem para UM próximo passo (o painel mostra
-      // "Depois de responder, segue para X"). Se já existir uma conexão
-      // saindo desse nó, uma nova ligação SUBSTITUI a antiga em vez de
-      // apenas se somar a ela — senão a ligação "sobrando" continuava
-      // silenciosamente ativa e o motor sempre usava a primeira criada,
-      // o que parecia um bug aleatório de "loop" para quem estava editando.
-      const sourceKind = nodes.find((node) => node.id === params.source)?.data?.kind;
-      const isSingleNext = sourceKind?.startsWith('input_');
+  const onConnect = useCallback((params) => {
+    // Uma ligação "solta" (puxada do conector de baixo, sem passar por um
+    // botão nomeado) representa o próximo passo natural do balão — segue
+    // sempre, sem exigir que o cliente digite nenhum número. Como só faz
+    // sentido UM próximo passo natural por balão, uma nova ligação assim
+    // SUBSTITUI a anterior (se houver) em vez de se somar a ela — senão as
+    // duas ficavam ativas disputando o mesmo gatilho "*", e só uma vencia
+    // silenciosamente, parecendo um bug aleatório de rota errada.
+    //
+    // Só vira uma escolha numerada quando o usuário adiciona botões
+    // nomeados ao balão (cada um com seu próprio conector e seu próprio
+    // número) — esses continuam podendo se somar à vontade, indo e
+    // voltando quantas vezes for preciso, inclusive para um balão anterior
+    // no fluxo.
+    const isFreeConnection = !params.sourceHandle;
 
-      setEdges((current) => {
-        const base = isSingleNext ? current.filter((edge) => edge.source !== params.source) : current;
-        const nextTrigger = String(base.filter((edge) => edge.source === params.source).length + 1);
-        return addEdge({ ...params, type: 'labeled', data: { trigger: nextTrigger } }, base);
-      });
-      setDirty(true);
-    },
-    [nodes]
-  );
+    setEdges((current) => {
+      const base = isFreeConnection
+        ? current.filter((edge) => edge.source !== params.source || edge.sourceHandle)
+        : current;
+      return addEdge({ ...params, type: 'labeled', data: isFreeConnection ? { trigger: '*' } : {} }, base);
+    });
+    setDirty(true);
+  }, []);
 
   const updateNodeData = useCallback((id, patch) => {
     setNodes((current) => current.map((node) => (node.id === id ? { ...node, data: { ...node.data, ...patch } } : node)));

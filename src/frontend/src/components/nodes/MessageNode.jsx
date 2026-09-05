@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
 /** Cresce junto com o conteúdo, sem nenhum teto — sem sensação de limite de tamanho. */
@@ -34,7 +34,29 @@ export default function MessageNode({ id, data }) {
   const supportsOptions = !isInput && !isHandoff;
   const options = supportsOptions && Array.isArray(data.options) ? data.options : [];
   const hasMedia = Boolean(data.mediaUrl?.trim());
-  const textareaRef = useCallback((el) => autoResize(el), [data.mensagem]);
+
+  // O quadro (React Flow) re-renderiza o nó a cada letra digitada — como o
+  // balão fica dentro de um canvas com zoom/posição próprios, o navegador
+  // às vezes "perde" o cursor nesse meio-tempo e joga ele pro fim do texto.
+  // Guarda a posição logo depois de cada tecla e restaura assim que o React
+  // termina de atualizar a tela, então o cursor nunca sai de onde a pessoa
+  // estava digitando.
+  const textareaElRef = useRef(null);
+  const caretRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const el = textareaElRef.current;
+    if (el && caretRef.current && document.activeElement === el) {
+      el.setSelectionRange(caretRef.current.start, caretRef.current.end);
+    }
+  }, [data.mensagem]);
+
+  const handleMensagemChange = (event) => {
+    const el = event.target;
+    caretRef.current = { start: el.selectionStart, end: el.selectionEnd };
+    data.onMensagemChange?.(el.value);
+    autoResize(el);
+  };
 
   return (
     <div className={`flow-node kind-${kind} ${data.selected ? 'is-selected' : ''} ${isStart ? 'is-start' : ''}`}>
@@ -74,14 +96,14 @@ export default function MessageNode({ id, data }) {
       )}
 
       <textarea
-        ref={textareaRef}
+        ref={(el) => {
+          textareaElRef.current = el;
+          autoResize(el);
+        }}
         className="flow-node-inline-textarea nodrag nowheel"
         rows={2}
         value={data.mensagem || ''}
-        onChange={(event) => {
-          data.onMensagemChange?.(event.target.value);
-          autoResize(event.target);
-        }}
+        onChange={handleMensagemChange}
         placeholder={
           isHandoff
             ? 'Mensagem enviada ao transferir (opcional)…'

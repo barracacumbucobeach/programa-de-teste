@@ -252,9 +252,11 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
               ))}
             </ul>
             <span className="field-hint field-hint-left">
-              Ligações feitas pela borda inferior do balão (não por um botão nomeado). Use{' '}
-              <code>*</code> como gatilho para "qualquer resposta" — útil quando a mensagem já
-              pergunta algo (ex: "como posso te chamar?") em vez de listar botões.
+              Ligações feitas pela borda inferior do balão (não por um botão nomeado) já vêm com{' '}
+              <code>*</code> — seguem sempre, sem o cliente precisar digitar nada específico. Só
+              troque esse campo se quiser que essa ligação só siga quando o cliente digitar
+              exatamente uma palavra (avançado); para dar opções de escolha pro cliente, use
+              "+ Adicionar botão" no balão em vez disso.
             </span>
           </div>
         )
