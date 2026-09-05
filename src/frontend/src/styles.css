@@ -1,11 +1,14 @@
 :root {
   --bg-app: #0b1220;
-  --bg-panel: #121a2b;
+  --bg-wash: radial-gradient(1200px 800px at 12% -8%, rgba(37, 211, 102, 0.08), transparent 60%),
+    radial-gradient(900px 700px at 100% 10%, rgba(45, 212, 191, 0.05), transparent 55%), #0b1220;
+  --bg-panel: #121a2bd9;
+  --bg-panel-solid: #121a2b;
   --bg-panel-alt: #17233a;
   --bg-canvas: #0d1526;
   --bg-elevated: #1b273e;
-  --border: #26334d;
-  --border-soft: #1c2740;
+  --border: #2c3a58;
+  --border-soft: #223049;
   --text-primary: #e8edf9;
   --text-secondary: #9aa8c7;
   --text-muted: #5b6b8c;
@@ -22,18 +25,24 @@
   --kind-audio: #fbbf24;
   --kind-input: #2dd4bf;
   --kind-handoff: #fb923c;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.22);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.22);
+  --shadow-lg: 0 28px 70px rgba(0, 0, 0, 0.48), 0 6px 18px rgba(0, 0, 0, 0.3);
+  --glass-blur: blur(20px);
 }
 
 /* ---------- tema claro ---------- */
 
 :root[data-theme='light'] {
   --bg-app: #eef1f6;
-  --bg-panel: #ffffff;
+  --bg-wash: radial-gradient(1200px 800px at 12% -8%, rgba(24, 150, 84, 0.07), transparent 60%),
+    radial-gradient(900px 700px at 100% 10%, rgba(13, 148, 136, 0.05), transparent 55%), #eef1f6;
+  --bg-panel: #ffffffcc;
+  --bg-panel-solid: #ffffff;
   --bg-panel-alt: #f6f8fb;
   --bg-canvas: #e7ebf2;
   --bg-elevated: #eef1f7;
@@ -55,8 +64,9 @@
   --kind-audio: #b45309;
   --kind-input: #0d9488;
   --kind-handoff: #c2410c;
-  --shadow-md: 0 8px 20px rgba(30, 41, 59, 0.1);
-  --shadow-lg: 0 20px 48px rgba(30, 41, 59, 0.16);
+  --shadow-sm: 0 2px 8px rgba(30, 41, 59, 0.06);
+  --shadow-md: 0 10px 24px rgba(30, 41, 59, 0.09), 0 2px 6px rgba(30, 41, 59, 0.05);
+  --shadow-lg: 0 24px 56px rgba(30, 41, 59, 0.16), 0 6px 16px rgba(30, 41, 59, 0.08);
 }
 
 * {
@@ -72,13 +82,36 @@ body,
 
 body {
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background: var(--bg-app);
+  background: var(--bg-wash);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
 }
 
 button {
   font-family: inherit;
+}
+
+/* Barras de rolagem finas e discretas, coerentes com o tema — em vez da
+   barra padrão do sistema, grossa e destoante do resto do visual. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+  background-clip: padding-box;
 }
 
 /* ---------- layout ---------- */
@@ -91,6 +124,9 @@ button {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  padding: 14px;
+  gap: 14px;
+  background: var(--bg-wash);
 }
 
 .app-shell > .sidebar {
@@ -102,12 +138,17 @@ button {
   flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
+  gap: 14px;
 }
 
 .canvas-wrap {
   flex: 1;
   position: relative;
   background: var(--bg-canvas);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
 }
 
 .canvas-loading {
@@ -123,7 +164,11 @@ button {
 
 .sidebar {
   background: var(--bg-panel);
-  border-right: 1px solid var(--border-soft);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   padding: 20px 16px;
   display: flex;
   flex-direction: column;
@@ -344,16 +389,17 @@ button {
 
 .btn {
   border: none;
-  border-radius: var(--radius-sm);
-  padding: 10px 16px;
+  border-radius: 999px;
+  padding: 10px 18px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.12s ease, filter 0.12s ease, background 0.12s ease;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.12s ease, background 0.12s ease,
+    box-shadow 0.15s ease;
 }
 
 .btn:active {
-  transform: translateY(1px);
+  transform: scale(0.97);
 }
 
 .btn:disabled {
@@ -373,6 +419,8 @@ button {
 
 .btn-primary:hover:not(:disabled) {
   filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(37, 211, 102, 0.38);
 }
 
 .btn-ghost {
@@ -383,6 +431,7 @@ button {
 
 .btn-ghost:hover:not(:disabled) {
   background: var(--border-soft);
+  border-color: var(--accent);
 }
 
 .btn-danger {
@@ -480,8 +529,12 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
   background: var(--bg-panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-sm);
 }
 
 .topbar h2 {
@@ -532,20 +585,23 @@ button {
   width: 240px;
   background: var(--bg-panel-alt);
   border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: 12px;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .flow-node:hover {
   border-color: #3a4a70;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .flow-node.is-selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .flow-node.is-start {
@@ -851,7 +907,11 @@ button {
   flex: 0 0 320px;
   width: 320px;
   background: var(--bg-panel);
-  border-left: 1px solid var(--border-soft);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   padding: 18px;
   display: flex;
   flex-direction: column;
@@ -877,14 +937,16 @@ button {
   color: var(--text-secondary);
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 50%;
   cursor: pointer;
   font-size: 12px;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
 }
 
 .icon-btn:hover {
   color: var(--text-primary);
   background: var(--border-soft);
+  transform: rotate(90deg);
 }
 
 .field {
@@ -961,7 +1023,7 @@ button {
 
 .option-trigger {
   width: 52px;
-  background: var(--bg-panel);
+  background: var(--bg-panel-solid);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 5px 6px;
@@ -1010,7 +1072,7 @@ button {
 .option-target-select {
   flex-shrink: 0;
   max-width: 40%;
-  background: var(--bg-panel);
+  background: var(--bg-panel-solid);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 5px 6px;
@@ -1038,7 +1100,7 @@ button {
 }
 
 .field code {
-  background: var(--bg-panel);
+  background: var(--bg-panel-solid);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 1px 5px;
@@ -1052,22 +1114,43 @@ button {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(4, 8, 16, 0.65);
-  backdrop-filter: blur(3px);
+  background: rgba(4, 8, 16, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 50;
+  animation: overlay-in 0.15s ease-out;
 }
 
 .modal-card {
   width: 380px;
   max-width: calc(100vw - 32px);
   background: var(--bg-panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: 22px;
   box-shadow: var(--shadow-lg);
+  animation: modal-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .modal-head {

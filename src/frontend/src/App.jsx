@@ -99,7 +99,13 @@ function FlowCanvas({ nodes, edges, onNodesChange, onEdgesChange, onConnect, onS
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#243250" />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable nodeColor="#25d366" maskColor="rgba(11,18,32,0.75)" />
+        <MiniMap
+          pannable
+          zoomable
+          nodeColor="#25d366"
+          maskColor="rgba(11,18,32,0.75)"
+          bgColor="var(--bg-panel-alt)"
+        />
       </ReactFlow>
     </div>
   );
