@@ -93,6 +93,24 @@ function createServer({ whatsapp, flowEngine, conversationLog, customerStore }) 
     res.json({ ok: true });
   });
 
+  app.get('/api/config', (req, res) => {
+    res.json(store.loadConfig());
+  });
+
+  app.post('/api/config', (req, res) => {
+    // Só dígitos (o cliente pode digitar com +, espaço, parênteses etc.) —
+    // vazio desliga a restrição e o bot volta a responder todo mundo.
+    const restrictToPhone = String(req.body?.restrictToPhone ?? '').replace(/\D/g, '');
+    const config = store.saveConfig({ restrictToPhone });
+    whatsapp.reloadConfig?.();
+    logger.info(
+      restrictToPhone
+        ? `🔒 Modo restrito ativado — só responde a +${restrictToPhone}.`
+        : '🔓 Modo restrito desativado — respondendo a todos os contatos.'
+    );
+    res.json({ ok: true, config });
+  });
+
   app.get('/api/handoffs', (req, res) => {
     res.json(customerStore.listPendingHandoffs());
   });

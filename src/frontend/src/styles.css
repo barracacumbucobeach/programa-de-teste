@@ -1501,3 +1501,22 @@ button {
   overflow: hidden;
   box-shadow: var(--shadow-md);
 }
+
+/* ---------- settings modal ---------- */
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.settings-current-status {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--kind-handoff) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kind-handoff) 35%, transparent);
+  color: var(--text-primary);
+  font-size: 12.5px;
+}

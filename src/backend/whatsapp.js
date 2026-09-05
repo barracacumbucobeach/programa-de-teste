@@ -11,15 +11,29 @@ const { simulateHumanPresence } = require('./humanizer');
 
 const logger = createLogger('whatsapp');
 
+/** Um .gif "de verdade" no WhatsApp é, por baixo dos panos, um vídeo mudo
+ *  com reprodução em loop (gifPlayback) — mandando o arquivo como mensagem
+ *  de imagem comum, ele chega estático (só o primeiro quadro), sem animar. */
+function isGifUrl(url) {
+  if (!url) return false;
+  try {
+    return /\.gif$/i.test(new URL(url).pathname);
+  } catch {
+    return /\.gif(\?|#|$)/i.test(url);
+  }
+}
+
 /** Monta o payload de envio do Baileys de acordo com o tipo de conteúdo do nó. */
 function buildOutgoingPayload(node) {
   const caption = node.mensagem || undefined;
 
   switch (node.kind) {
     case 'image':
-      return node.mediaUrl ? { image: { url: node.mediaUrl }, caption } : null;
     case 'video':
-      return node.mediaUrl ? { video: { url: node.mediaUrl }, caption } : null;
+      if (!node.mediaUrl) return null;
+      return isGifUrl(node.mediaUrl)
+        ? { video: { url: node.mediaUrl }, caption, gifPlayback: true }
+        : { [node.kind]: { url: node.mediaUrl }, caption };
     case 'audio':
       return node.mediaUrl ? { audio: { url: node.mediaUrl }, mimetype: 'audio/mpeg', ptt: true } : null;
     case 'text':
@@ -53,6 +67,11 @@ class WhatsAppConnection extends EventEmitter {
     this.qrDataUrl = null;
     this.stats = { received: 0, sent: 0 };
     this.DisconnectReason = null;
+    // Modo restrito (opcional): telefone (só dígitos) que o bot deve
+    // responder, ou vazio para responder a todo mundo. Carregado uma vez e
+    // recarregado via reloadConfig() sempre que a tela de Configurações
+    // salvar um valor novo.
+    this.config = store.loadConfig();
     // Detecta uma sessão local corrompida/inválida: se a conexão cai várias
     // vezes seguidas sem nunca chegar a exibir um QR Code ou conectar de
     // fato, as credenciais salvas em disco provavelmente estão quebradas —
@@ -204,6 +223,16 @@ class WhatsAppConnection extends EventEmitter {
       // realmente entrega a mensagem de volta para esse chat).
       const customerId = jid.endsWith('@lid') && msg.key.senderPn ? msg.key.senderPn : jid;
 
+      // Modo restrito (opcional, configurável na tela de Configurações):
+      // com um telefone definido, o bot ignora completamente qualquer outro
+      // contato — útil pra testar o fluxo sem incomodar clientes de verdade,
+      // ou deixar o bot só de olho numa conversa específica.
+      const restrictTo = this.config?.restrictToPhone;
+      if (restrictTo) {
+        const phoneDigits = customerId.split('@')[0].replace(/\D/g, '');
+        if (phoneDigits !== restrictTo) continue;
+      }
+
       const text = (
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
@@ -256,6 +285,12 @@ class WhatsAppConnection extends EventEmitter {
         }
       }
     }
+  }
+
+  /** Chamado pela API sempre que a tela de Configurações salva um valor
+   *  novo — evita ter que reiniciar o app pra aplicar o modo restrito. */
+  reloadConfig() {
+    this.config = store.loadConfig();
   }
 
   emitStatus() {

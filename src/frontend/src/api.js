@@ -26,6 +26,8 @@ export const api = {
   deleteCustomer: (jid) => request(`/api/customers/${encodeURIComponent(jid)}`, { method: 'DELETE' }),
   getHandoffs: () => request('/api/handoffs'),
   resolveHandoff: (jid) => request(`/api/handoffs/${encodeURIComponent(jid)}/resolve`, { method: 'POST' }),
+  getConfig: () => request('/api/config'),
+  saveConfig: (config) => request('/api/config', { method: 'POST', body: JSON.stringify(config) }),
 };
 
 /**

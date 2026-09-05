@@ -106,7 +106,9 @@ export default function NodePanel({ node, edges, nodes, onChange, onSetOptionTar
             placeholder="https://exemplo.com/arquivo.jpg"
           />
           <span className="field-hint field-hint-left">
-            Link direto e público para o arquivo — o motor baixa e reenvia pelo WhatsApp.
+            Link direto e público para o arquivo — o motor baixa e reenvia pelo WhatsApp. Um link
+            terminado em <code>.gif</code> é enviado como GIF animado de verdade (com loop),
+            não como imagem parada.
           </span>
         </label>
       )}

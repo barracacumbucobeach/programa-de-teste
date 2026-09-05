@@ -20,6 +20,7 @@ import QRModal from './components/QRModal.jsx';
 import ConversationsModal from './components/ConversationsModal.jsx';
 import CustomersModal from './components/CustomersModal.jsx';
 import HandoffsModal from './components/HandoffsModal.jsx';
+import SettingsModal from './components/SettingsModal.jsx';
 import ToastStack, { useToasts } from './components/ToastStack.jsx';
 import MessageNode, { KIND_META } from './components/nodes/MessageNode.jsx';
 import LabeledEdge from './components/edges/LabeledEdge.jsx';
@@ -122,6 +123,7 @@ export default function App() {
   const [conversationsOpen, setConversationsOpen] = useState(false);
   const [customersOpen, setCustomersOpen] = useState(false);
   const [handoffsOpen, setHandoffsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [liveMessage, setLiveMessage] = useState(null);
   const [liveHandoff, setLiveHandoff] = useState(null);
   const [liveHandoffResolved, setLiveHandoffResolved] = useState(null);
@@ -371,6 +373,7 @@ export default function App() {
         onOpenConversations={() => setConversationsOpen(true)}
         onOpenCustomers={() => setCustomersOpen(true)}
         onOpenHandoffs={() => setHandoffsOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
         pendingHandoffCount={pendingHandoffs.length}
       />
 
@@ -428,6 +431,7 @@ export default function App() {
         liveHandoffResolved={liveHandoffResolved}
         pushToast={pushToast}
       />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} pushToast={pushToast} />
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

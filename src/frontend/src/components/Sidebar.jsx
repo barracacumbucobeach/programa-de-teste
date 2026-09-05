@@ -60,6 +60,7 @@ export default function Sidebar({
   onOpenConversations,
   onOpenCustomers,
   onOpenHandoffs,
+  onOpenSettings,
   pendingHandoffCount = 0,
 }) {
   const startExists = nodes.some((node) => node.id === 'start');
@@ -126,6 +127,9 @@ export default function Sidebar({
         </button>
         <button type="button" className="btn btn-block btn-ghost" onClick={onOpenCustomers}>
           🗂️ Clientes
+        </button>
+        <button type="button" className="btn btn-block btn-ghost" onClick={onOpenSettings}>
+          ⚙️ Configurações
         </button>
       </div>
 

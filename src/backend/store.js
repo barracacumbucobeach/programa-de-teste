@@ -16,6 +16,7 @@ const FLOW_FILE = path.join(DATA_DIR, 'fluxo_bot.json');
 const STATE_FILE = path.join(DATA_DIR, 'estado_clientes.json');
 const CONVERSATIONS_FILE = path.join(DATA_DIR, 'conversas.jsonl');
 const CUSTOMERS_FILE = path.join(DATA_DIR, 'clientes.json');
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
 /** Fluxo mínimo usado apenas se a pasta data/ estiver vazia. */
 const DEFAULT_BUILDER = {
@@ -207,6 +208,16 @@ function saveCustomersDebounced(customers) {
   saveCustomersTimer = setTimeout(() => writeJSONAtomic(CUSTOMERS_FILE, customers), 500);
 }
 
+/** Configurações gerais do app (hoje só o modo restrito de atendimento). */
+function loadConfig() {
+  return readJSON(CONFIG_FILE, {});
+}
+
+function saveConfig(config) {
+  writeJSONAtomic(CONFIG_FILE, config);
+  return config;
+}
+
 module.exports = {
   DATA_DIR,
   AUTH_DIR,
@@ -215,6 +226,7 @@ module.exports = {
   STATE_FILE,
   CONVERSATIONS_FILE,
   CUSTOMERS_FILE,
+  CONFIG_FILE,
   MESSAGE_KINDS,
   INPUT_KINDS,
   HANDOFF_KIND,
@@ -227,4 +239,6 @@ module.exports = {
   saveClientStateDebounced,
   loadCustomersRaw,
   saveCustomersDebounced,
+  loadConfig,
+  saveConfig,
 };
