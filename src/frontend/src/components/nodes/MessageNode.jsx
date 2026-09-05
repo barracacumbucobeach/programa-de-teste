@@ -136,7 +136,12 @@ export default function MessageNode({ id, data }) {
         </button>
       )}
 
-      <Handle type="source" position={Position.Bottom} className="flow-handle" />
+      {/* O conector genérico embaixo só existe quando o balão NÃO tem botões
+          nomeados — com botões, cada um já tem seu próprio conector à direita,
+          e manter os dois ao mesmo tempo deixava fácil ligar sem querer pelo
+          de baixo, criando uma ligação "solta" que podia disputar (e até
+          vencer) o gatilho de um botão numerado na hora de compilar o fluxo. */}
+      {options.length === 0 && <Handle type="source" position={Position.Bottom} className="flow-handle" />}
     </div>
   );
 }

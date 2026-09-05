@@ -127,12 +127,15 @@ function compileGraph(graph) {
 
     // Conexões "soltas" (feitas pela borda inferior comum, sem passar por um
     // botão nomeado) continuam com gatilho de texto livre — inclui o
-    // curinga "*", que casa quando nenhuma opção numerada bate.
+    // curinga "*", que casa quando nenhuma opção numerada bate. Um botão
+    // nomeado sempre tem prioridade sobre uma ligação solta que por acaso
+    // caia no mesmo número (ex.: um "1" solto feito sem querer não pode
+    // roubar o gatilho do botão "1 - Catálogo").
     outgoing
       .filter((edge) => !edge.sourceHandle || !options.some((option) => option.id === edge.sourceHandle))
       .forEach((edge) => {
         const gatilho = String(edge.data?.trigger ?? edge.label ?? '1').trim();
-        if (gatilho) opcoes[gatilho] = edge.target;
+        if (gatilho && !(gatilho in opcoes)) opcoes[gatilho] = edge.target;
       });
 
     compiled[node.id] = {
