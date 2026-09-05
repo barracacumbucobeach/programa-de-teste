@@ -16,6 +16,12 @@ const RESET_KEYWORDS = new Set(['menu', '0', 'inicio', 'início', 'voltar']);
  */
 const SESSION_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 
+/** Teto de segurança para uma cadeia de balões automáticos numa única
+ *  resposta — evita travar (ou virar spam) se o fluxo tiver um ciclo de
+ *  balões "soltos" se ligando entre si sem nunca parar numa Pergunta,
+ *  num balão com botões ou num atendente. */
+const MAX_CHAIN_LENGTH = 25;
+
 const INPUT_VALIDATORS = {
   input_text: () => true,
   input_number: (text) => /^-?\d+([.,]\d+)?$/.test(text.trim()),
@@ -37,9 +43,18 @@ function renderTemplate(text, variables = {}) {
 
 /**
  * Motor de estados da conversa: decide, para cada mensagem recebida,
- * qual é o próximo nó do fluxo, mantém em memória (persistindo em disco)
- * em que etapa cada cliente está, e — quando o nó atual é uma "Pergunta" —
- * valida e salva a resposta como variável do cliente (customerStore).
+ * qual é o próximo nó (ou sequência de nós) do fluxo, mantém em memória
+ * (persistindo em disco) em que etapa cada cliente está, e — quando o nó
+ * atual é uma "Pergunta" — valida e salva a resposta como variável do
+ * cliente (customerStore).
+ *
+ * Um balão comum (texto/imagem/vídeo/áudio) sem botões nomeados não pede
+ * nada ao cliente — por isso, ao ser alcançado, o motor já encadeia
+ * automaticamente para o próximo balão (e o próximo, e o próximo...) na
+ * mesma resposta, como no Typebot. A cadeia só para numa Pergunta (precisa
+ * da resposta do cliente para continuar), num balão com botões nomeados
+ * (precisa que o cliente escolha), num atendente (pausa pra um humano), ou
+ * num balão sem nenhuma ligação de saída (fim de papo).
  */
 class FlowEngine extends EventEmitter {
   constructor(customerStore) {
@@ -72,24 +87,75 @@ class FlowEngine extends EventEmitter {
     return { ...node, mensagem: renderTemplate(node.mensagem, variables) };
   }
 
-  _render(key, jid) {
-    const node = this.flow[key];
-    if (!node) return { key, node: null, isWelcome: true };
+  /** Dispara o pedido de atendimento humano (pausa o bot pra este cliente e
+   *  avisa quem estiver com o app aberto: toast, notificação do sistema e
+   *  o painel "Atendimentos"). */
+  _triggerHandoff(node, key, jid) {
+    const handoff = this.customerStore?.requestHandoff(jid, { nodeTitle: node.title || key });
+    this.emit('handoff', {
+      jid,
+      phone: jid.split('@')[0],
+      nodeKey: key,
+      nodeTitle: node.title || key,
+      at: handoff?.requestedAt || Date.now(),
+    });
+  }
 
-    if (node.kind === 'handoff') {
-      // Pausa o bot para este cliente e avisa quem estiver com o app aberto
-      // (toast, notificação do sistema e o painel "Atendimentos").
-      const handoff = this.customerStore?.requestHandoff(jid, { nodeTitle: node.title || key });
-      this.emit('handoff', {
-        jid,
-        phone: jid.split('@')[0],
-        nodeKey: key,
-        nodeTitle: node.title || key,
-        at: handoff?.requestedAt || Date.now(),
-      });
+  /**
+   * Monta a sequência de balões a enviar a partir de `startKey`, encadeando
+   * balões automáticos (sem Pergunta nem botões) até parar num que precisa
+   * da participação do cliente (ou até acabar a ligação). `firstOverride`,
+   * se passado, substitui só o texto do PRIMEIRO balão da cadeia (usado
+   * pela mensagem de retorno de quem já é conhecido) — o resto da cadeia
+   * segue com o texto normal de cada nó.
+   *
+   * @returns {Array<{ key: string, node: object }>}
+   */
+  _buildChain(startKey, jid, { firstOverride } = {}) {
+    const chain = [];
+    const visited = new Set();
+    let key = startKey;
+    let pendingOverride = firstOverride;
+
+    while (key && this.flow[key] && !visited.has(key) && chain.length < MAX_CHAIN_LENGTH) {
+      visited.add(key);
+      const node = this.flow[key];
+
+      const rendered =
+        pendingOverride != null ? { ...node, mensagem: pendingOverride } : this._withVariables(node, jid);
+      pendingOverride = null;
+
+      if (node.kind === 'handoff') this._triggerHandoff(node, key, jid);
+
+      chain.push({ key, node: rendered });
+
+      // Pergunta (precisa da resposta), balão com botões nomeados (precisa
+      // da escolha) ou atendente (pausa pra humano): a cadeia para aqui.
+      const requiresCustomer = Boolean(node.variable) || Boolean(node.opcoesTexto) || node.kind === 'handoff';
+      if (requiresCustomer) break;
+
+      // Balão comum: só continua sozinho se tiver exatamente UM caminho
+      // natural configurado (sem botões, sem gatilho — só o "*" implícito
+      // de uma ligação simples). Sem isso, é um fim de papo mesmo.
+      const opcoes = node.opcoes || {};
+      const keys = Object.keys(opcoes);
+      if (keys.length === 1 && keys[0] === '*') {
+        key = opcoes['*'];
+      } else {
+        break;
+      }
     }
 
-    return { key, node: this._withVariables(node, jid), isWelcome: true };
+    return chain;
+  }
+
+  /** Monta a cadeia a partir de `key` e já atualiza o estado do cliente
+   *  para o ÚLTIMO nó dela (onde o bot fica esperando, se for o caso). */
+  _advance(key, jid, opts) {
+    const chain = this._buildChain(key, jid, opts);
+    const lastKey = chain.length > 0 ? chain[chain.length - 1].key : key;
+    this.setState(jid, lastKey);
+    return { key: lastKey, nodes: chain.map((c) => c.node), isWelcome: true };
   }
 
   /** Atendente marcou como resolvido: bot volta a responder e o cliente reinicia no início. */
@@ -103,7 +169,7 @@ class FlowEngine extends EventEmitter {
    * conversa do zero (não continua de onde parou) — mas, se o nó inicial é
    * uma Pergunta cuja resposta já está salva e tem uma "mensagem de
    * retorno" configurada, pula a pergunta (já sabe a resposta) e manda essa
-   * mensagem no lugar, direto seguida das opções do próximo passo.
+   * mensagem no lugar, encadeando dali em diante normalmente.
    */
   _renderReturning(jid) {
     const startNode = this.flow.start;
@@ -112,32 +178,16 @@ class FlowEngine extends EventEmitter {
 
     const canSkipQuestion = startNode?.variable && variables[startNode.variable] && startNode.mensagemRetorno && target;
 
-    if (!canSkipQuestion) {
-      this.setState(jid, 'start');
-      return this._render('start', jid);
-    }
+    if (!canSkipQuestion) return this._advance('start', jid);
 
     const greeting = renderTemplate(startNode.mensagemRetorno, variables);
-    const mensagem = target.opcoesTexto ? `${greeting}\n\n${target.opcoesTexto}` : greeting;
+    const firstOverride = target.opcoesTexto ? `${greeting}\n\n${target.opcoesTexto}` : greeting;
 
-    this.setState(jid, startNode.next);
-
-    if (target.kind === 'handoff') {
-      const handoff = this.customerStore?.requestHandoff(jid, { nodeTitle: target.title || startNode.next });
-      this.emit('handoff', {
-        jid,
-        phone: jid.split('@')[0],
-        nodeKey: startNode.next,
-        nodeTitle: target.title || startNode.next,
-        at: handoff?.requestedAt || Date.now(),
-      });
-    }
-
-    return { key: startNode.next, node: { ...target, mensagem }, isWelcome: true };
+    return this._advance(startNode.next, jid, { firstOverride });
   }
 
   /**
-   * @returns {{ key: string, node: object|null, isWelcome: boolean, unmatched?: boolean, paused?: boolean }}
+   * @returns {{ key: string, nodes: object[], isWelcome: boolean, unmatched?: boolean, paused?: boolean }}
    */
   resolveNextNode(jid, rawText) {
     const text = (rawText || '').trim();
@@ -149,25 +199,20 @@ class FlowEngine extends EventEmitter {
     if (isPaused) {
       if (RESET_KEYWORDS.has(normalized)) {
         this.customerStore?.resolveHandoff(jid);
-        this.setState(jid, 'start');
-        return this._render('start', jid);
+        return this._advance('start', jid);
       }
       // Um atendente humano está cuidando desta conversa — o bot fica em
       // silêncio (a mensagem ainda é registrada no histórico, só não gera
       // resposta automática) até ser marcada como resolvida.
-      return { key: state.key, node: null, isWelcome: false, paused: true };
+      return { key: state.key, nodes: [], isWelcome: false, paused: true };
     }
 
-    if (isNewClient) {
-      this.setState(jid, 'start');
-      return this._render('start', jid);
-    }
+    if (isNewClient) return this._advance('start', jid);
 
     if (RESET_KEYWORDS.has(normalized)) {
       // Pedido explícito de voltar ao início: sempre mostra o começo de
       // verdade (pergunta incluída), mesmo que o cliente já seja conhecido.
-      this.setState(jid, 'start');
-      return this._render('start', jid);
+      return this._advance('start', jid);
     }
 
     // Cliente conhecido que ficou tempo demais sem mandar mensagem: prefere
@@ -181,8 +226,7 @@ class FlowEngine extends EventEmitter {
 
     if (!currentNode) {
       // O fluxo foi alterado e o nó em que o cliente estava não existe mais.
-      this.setState(jid, 'start');
-      return this._render('start', jid);
+      return this._advance('start', jid);
     }
 
     // Nó de "Pergunta": a mensagem do cliente é a resposta, não uma opção de menu.
@@ -192,44 +236,34 @@ class FlowEngine extends EventEmitter {
       if (!validator(text)) {
         this.setState(jid, currentKey); // continua no mesmo passo, mas atualiza "última vez que falou"
         const invalidMessage = INVALID_MESSAGES[currentNode.kind] || 'Não entendi, pode tentar de novo?';
-        return { key: currentKey, node: { ...currentNode, mensagem: invalidMessage }, isWelcome: false, unmatched: true };
+        return { key: currentKey, nodes: [{ ...currentNode, mensagem: invalidMessage }], isWelcome: false, unmatched: true };
       }
 
       this.customerStore?.setVariable(jid, currentNode.variable, text);
 
       const nextKey = currentNode.next;
       if (!nextKey || !this.flow[nextKey]) {
-        return { key: currentKey, node: null, isWelcome: false };
+        return { key: currentKey, nodes: [], isWelcome: false };
       }
 
-      this.setState(jid, nextKey);
-      return this._render(nextKey, jid);
+      return this._advance(nextKey, jid);
     }
 
     const opcoes = currentNode.opcoes || {};
     const matchKey = Object.keys(opcoes).find((k) => k.trim().toLowerCase() === normalized);
 
-    if (matchKey) {
-      const nextKey = opcoes[matchKey];
-      this.setState(jid, nextKey);
-      return this._render(nextKey, jid);
-    }
+    if (matchKey) return this._advance(opcoes[matchKey], jid);
 
     // Gatilho curinga "*": segue por ali quando nenhuma opção numerada bate —
-    // útil para uma mensagem inicial que já pergunta algo em vez de listar
-    // opções (ex.: "como posso te chamar?" seguido de uma única conexão com
-    // gatilho "*", em vez de exigir uma resposta exata como "1").
+    // só existe aqui quando o balão tem botões nomeados E também uma
+    // ligação simples de "qualquer outra resposta" ao mesmo tempo.
     const wildcardKey = Object.keys(opcoes).find((k) => k.trim() === '*');
-    if (wildcardKey) {
-      const nextKey = opcoes[wildcardKey];
-      this.setState(jid, nextKey);
-      return this._render(nextKey, jid);
-    }
+    if (wildcardKey) return this._advance(opcoes[wildcardKey], jid);
 
     // Nenhuma opção reconhecida: repete a mensagem atual (o cliente permanece na mesma etapa,
     // mas ainda está "presente" — atualiza a hora, pra não ser tratado como sumido depois).
     this.setState(jid, currentKey);
-    return { key: currentKey, node: this._withVariables(currentNode, jid), isWelcome: false, unmatched: true };
+    return { key: currentKey, nodes: [this._withVariables(currentNode, jid)], isWelcome: false, unmatched: true };
   }
 }
 

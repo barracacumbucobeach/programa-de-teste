@@ -224,30 +224,36 @@ class WhatsAppConnection extends EventEmitter {
         continue;
       }
 
-      const node = result?.node;
-      if (!node) continue;
+      // Um balão que não pede nada ao cliente (texto/imagem/vídeo/áudio sem
+      // botões) encadeia sozinho até parar numa Pergunta, num balão com
+      // botões ou num atendente — por isso o motor pode devolver VÁRIOS
+      // balões pra essa única mensagem recebida. Envia um de cada vez, na
+      // ordem, com a mesma simulação de "digitando..."/"gravando..." entre
+      // eles, como se fosse uma pessoa mandando várias mensagens seguidas.
+      for (const node of result?.nodes || []) {
+        const payload = buildOutgoingPayload(node);
+        if (!payload) continue; // nó de mídia sem URL configurada, ou texto vazio
 
-      const payload = buildOutgoingPayload(node);
-      if (!payload) continue; // nó de mídia sem URL configurada, ou texto vazio
+        try {
+          const presence = node.kind === 'audio' ? 'recording' : 'composing';
+          await simulateHumanPresence(this.sock, jid, node.mensagem || '', { presence });
+          await this.sock.sendMessage(jid, payload);
 
-      try {
-        const presence = node.kind === 'audio' ? 'recording' : 'composing';
-        await simulateHumanPresence(this.sock, jid, node.mensagem || '', { presence });
-        await this.sock.sendMessage(jid, payload);
-
-        this.stats.sent += 1;
-        const outgoingLog = {
-          direction: 'out',
-          jid: customerId,
-          kind: node.kind || 'text',
-          text: node.mensagem || '',
-          at: Date.now(),
-        };
-        this.conversationLog?.append(outgoingLog);
-        this.emit('message-log', outgoingLog);
-        this.emitStatus();
-      } catch (err) {
-        logger.error(`Falha ao enviar mensagem para ${jid}:`, err.message);
+          this.stats.sent += 1;
+          const outgoingLog = {
+            direction: 'out',
+            jid: customerId,
+            kind: node.kind || 'text',
+            text: node.mensagem || '',
+            at: Date.now(),
+          };
+          this.conversationLog?.append(outgoingLog);
+          this.emit('message-log', outgoingLog);
+          this.emitStatus();
+        } catch (err) {
+          logger.error(`Falha ao enviar mensagem para ${jid}:`, err.message);
+          break; // não tenta mandar o resto da cadeia se um envio já falhou
+        }
       }
     }
   }
