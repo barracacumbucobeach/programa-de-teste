@@ -144,6 +144,17 @@ class FlowEngine extends EventEmitter {
       return this._render(nextKey, jid);
     }
 
+    // Gatilho curinga "*": segue por ali quando nenhuma opção numerada bate —
+    // útil para uma mensagem inicial que já pergunta algo em vez de listar
+    // opções (ex.: "como posso te chamar?" seguido de uma única conexão com
+    // gatilho "*", em vez de exigir uma resposta exata como "1").
+    const wildcardKey = Object.keys(opcoes).find((k) => k.trim() === '*');
+    if (wildcardKey) {
+      const nextKey = opcoes[wildcardKey];
+      this.setState(jid, nextKey);
+      return this._render(nextKey, jid);
+    }
+
     // Nenhuma opção reconhecida: repete a mensagem atual (o cliente permanece na mesma etapa).
     return { key: currentKey, node: this._withVariables(currentNode, jid), isWelcome: false, unmatched: true };
   }

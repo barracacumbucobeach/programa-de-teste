@@ -141,6 +141,10 @@ export default function NodePanel({ node, edges, nodes, onChange, onEdgeTriggerC
                 </li>
               ))}
             </ul>
+            <span className="field-hint field-hint-left">
+              Use <code>*</code> como gatilho para "qualquer resposta" — útil quando a mensagem já
+              pergunta algo (ex: "como posso te chamar?") em vez de listar opções numeradas.
+            </span>
           </div>
         )
       )}

@@ -76,6 +76,18 @@ export default function Sidebar({
     (node) => edges.filter((edge) => edge.source === node.id).length !== 1
   ).length;
 
+  // Nó sem mensagem (nem mídia, quando é o caso) = o bot fica em silêncio
+  // nesse ponto do fluxo — muito fácil de passar despercebido, já que o
+  // WhatsApp simplesmente não recebe nada e parece que "travou".
+  const emptyContentNodes = nodes.filter((node) => {
+    const kind = node.data?.kind || 'text';
+    const hasMessage = Boolean(node.data?.mensagem?.trim());
+    const hasMedia = Boolean(node.data?.mediaUrl?.trim());
+    if (kind === 'handoff') return false; // mensagem é opcional nesse tipo
+    if (kind === 'image' || kind === 'video' || kind === 'audio') return !hasMessage && !hasMedia;
+    return !hasMessage;
+  }).length;
+
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
@@ -135,6 +147,12 @@ export default function Sidebar({
                 : `${unwiredQuestions} pergunta(s) sem exatamente 1 conexão de saída`}
             </li>
           )}
+          <li className={emptyContentNodes === 0 ? 'ok' : 'warn'}>
+            <span className="check-icon">{emptyContentNodes === 0 ? '✓' : '!'}</span>
+            {emptyContentNodes === 0
+              ? 'Todos os nós têm mensagem'
+              : `${emptyContentNodes} nó(s) sem mensagem (bot fica em silêncio ali)`}
+          </li>
         </ul>
         <div className="sidebar-stats">
           <div className="stat-box">
